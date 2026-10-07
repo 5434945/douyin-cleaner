@@ -6,6 +6,13 @@
 
 建议使用 [最新 Release](https://github.com/5434945/douyin-cleaner/releases/latest)。历史版本用于审阅演进；本地测试不等同于已安装扩展的完整实站验证。
 
+## [v0.3.1](https://github.com/5434945/douyin-cleaner/releases/tag/v0.3.1) — 补充作者旁广告标签与 SVG 标识
+
+- 补充昵称外层中的独立广告标签、嵌套广告节点、可读 SVG 广告标签及已观察到的广告图形。
+- 继续排除普通文案、昵称、评论和隐藏节点，减少误判。
+
+**验证：** Node 21 项、Chrome 本地回归 75 项通过；4 项针对性测试从失败转为通过。
+
 ## [v0.3.0](https://github.com/5434945/douyin-cleaner/releases/tag/v0.3.0) — 作者黑名单及有依据的推广账号收集
 
 - 支持按稳定作者 ID 拉黑、导入、移除；白名单优先，名单保存在本机。

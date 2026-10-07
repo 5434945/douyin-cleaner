@@ -58,6 +58,13 @@ function sample(entry) {
   node.className = 'sample';
   return node;
 }
+function nestedBadge(root, hidden = false) {
+  root.querySelector('[data-e2e="feed-video-nickname"]').innerHTML = '<span class="account-name-text">@魔兽世界：无限</span><span class="badge"' + (hidden ? ' hidden' : '') + '>广告</span>';
+}
+const observedAdGlyph = 'M9.492 2.004L8.22 2.22c.216.336.408.72.588 1.128h-4.38v3.636c-.024 2.34-.348 4.176-.972 5.496l.96.852c.744-1.596 1.128-3.708 1.164-6.348V4.452h8.796V3.348h-4.308a16.717 16.717 0 0 0-.576-1.344zm15.564 6.672h-8.04v4.548h1.152v-.576h5.736v.576h1.152V8.676zm-6.888 2.904V9.756h5.736v1.824h-5.736zm-.276-6.732h2.688v1.656h-5.04V7.62h10.92V6.504h-4.74V4.848h3.828V3.756H21.72V2.148h-1.14v1.608h-2.016c.204-.408.372-.852.516-1.32l-1.128-.144c-.384 1.248-1.104 2.292-2.16 3.144l.684.9a8.301 8.301 0 0 0 1.416-1.488z';
+function glyphBadge(root) {
+  root.querySelector('.account').insertAdjacentHTML('beforeend', `<svg viewBox="0 0 60 32" width="30" height="16"><path d="${observedAdGlyph}"/></svg>`);
+}
 async function check(name, fn) {
   const row = document.createElement('li'); row.textContent = `运行中：${name}`; results.append(row);
   try { await fn(); passed++; row.textContent = `✓ ${name}`; row.style.color = '#a6e0c8'; }
@@ -74,6 +81,13 @@ document.getElementById('run').addEventListener('click', async event => {
   await check('作者名为广告，不误判', () => { const root = sample(item()); root.querySelector('[data-e2e="feed-video-nickname"]').textContent = '广告'; assert(classify(root).type === 'normal'); });
   await check('普通视频带直播头像，不误判', () => assert(classify(sample(item())).type === 'normal'));
   await check('作者信息区广告标识识别', () => assert(classify(sample(item('ad'))).type === 'ad'));
+  await check('昵称容器内独立广告标签识别', () => { const root = sample(item()); nestedBadge(root); assert(classify(root).rule === 'ad-label'); assert(originalCore.authorInfo(root).name === '魔兽世界：无限'); });
+  await check('昵称容器内专用广告节点识别', () => { const root = sample(item()); root.querySelector('[data-e2e="feed-video-nickname"]').insertAdjacentHTML('beforeend', '<span data-e2e="ad-label">广告</span>'); assert(classify(root).rule === 'ad-node'); });
+  await check('SVG 广告标题可识别，不依赖图标兼容开关', () => { const root = sample(item()); root.querySelector('.account').insertAdjacentHTML('beforeend', '<svg width="30" height="16"><title>广告</title><rect width="30" height="16"/></svg>'); assert(classify(root, { iconDetection: false }).rule === 'ad-label'); });
+  await check('实站广告字形在 viewBox 改变后仍识别', () => { const root = sample(item()); glyphBadge(root); assert(classify(root).rule === 'ad-account-icon'); assert(classify(root, { iconDetection: false }).type === 'normal'); });
+  await check('昵称文字包装成广告仍保留', () => { const root = sample(item()); root.querySelector('[data-e2e="feed-video-nickname"]').innerHTML = '<span class="account-name-text"><span>广告</span></span>'; assert(classify(root).type === 'normal'); });
+  await check('隐藏的昵称区域广告标签仍排除', () => { const root = sample(item()); nestedBadge(root, true); assert(classify(root).type === 'normal'); });
+  await check('简介和评论中的 SVG 广告标题仍排除', () => { const root = sample(item()); root.querySelector('[data-e2e="video-desc"]').innerHTML = '<svg width="30" height="16"><title>广告</title><rect width="30" height="16"/></svg>'; assert(classify(root).type === 'normal'); });
   await check('推广标识识别', () => assert(classify(sample(item('promo'))).type === 'ad'));
   await check('广告专用节点识别', () => { const root = sample(item()); root.insertAdjacentHTML('beforeend', '<a data-e2e="ad-link">了解详情</a>'); assert(classify(root).rule === 'ad-node'); });
   await check('广告图标兼容规则可关闭', () => { const root = sample(item('icon')); assert(classify(root).type === 'ad'); assert(classify(root, { iconDetection: false }).type === 'normal'); });
@@ -112,6 +126,8 @@ document.getElementById('run').addEventListener('click', async event => {
   await check('预加载的屏外广告不会选为当前卡片', () => { const normal = item(); sample(normal); const ad = document.createElement('div'); ad.innerHTML = cardHTML(item('ad')); const node = ad.firstElementChild; node.style.position = 'fixed'; node.style.top = '2000px'; node.style.width = '600px'; node.style.height = '400px'; fixtures.append(node); assert(originalCore.identity(originalCore.activeCard()) === `data-e2e-vid:${normal.id}`); });
   await check('节点复用后内容 ID 变化', () => { const root = sample(item()); const before = originalCore.identity(root); root.querySelector('[data-e2e-vid]').setAttribute('data-e2e-vid', 'changed'); assert(originalCore.identity(root) !== before); });
   fixtures.replaceChildren();
+  await check('昵称旁独立广告标签实际跳过且只计一次', async () => { await reset([item(), item()]); nestedBadge(cardsNode.firstElementChild); await until(() => storageData.stats.ad === 1); await delay(450); assert(model.index === 1 && model.clicks === 1 && storageData.stats.ad === 1); });
+  await check('实站广告字形变体实际跳过', async () => { await reset([item(), item()]); glyphBadge(cardsNode.firstElementChild); await until(() => storageData.stats.ad === 1); assert(model.index === 1 && model.clicks === 1); });
   await check('广告跳过一次，确认成功后计数', async () => { await reset([item('ad'), item()]); await until(() => storageData.stats.ad === 1); await delay(800); assert(model.index === 1 && model.clicks === 1 && storageData.stats.ad === 1); });
   await check('连续广告和直播都跳过，不多跳正常视频', async () => { await reset([item('ad'), item('live'), item()]); await until(() => storageData.stats.live === 1); assert(model.index === 2 && model.clicks === 2 && storageData.stats.ad === 1); });
   await check('独立直播与旧视频共存时真实切换并计数', async () => {
@@ -256,4 +272,14 @@ document.getElementById('run').addEventListener('click', async event => {
   document.getElementById('summary').dataset.result = failedCount ? 'fail' : 'pass';
   document.getElementById('manual-status').textContent = '手动验证：按向下方向键进入广告，随后立刻按向上方向键。插件应保留正常视频。';
   runButton.disabled = false; running = false;
+});
+
+document.getElementById('ad-regression').addEventListener('click', async () => {
+  await reset([], { enabled: false }); results.replaceChildren(); passed = 0; failedCount = 0;
+  const classify = root => originalCore.classify(root, originalCore.normalizeSettings());
+  await check('昵称旁独立广告标签', () => { const root = sample(item()); nestedBadge(root); assert(classify(root).type === 'ad'); });
+  await check('昵称内专用广告节点', () => { const root = sample(item()); root.querySelector('[data-e2e="feed-video-nickname"]').insertAdjacentHTML('beforeend', '<span data-e2e="ad-label">广告</span>'); assert(classify(root).type === 'ad'); });
+  await check('SVG 明确广告标题', () => { const root = sample(item()); root.querySelector('.account').insertAdjacentHTML('beforeend', '<svg width="30" height="16"><title>广告</title><rect width="30" height="16"/></svg>'); assert(classify(root).type === 'ad'); });
+  await check('实站广告字形尺寸变化', () => { const root = sample(item()); glyphBadge(root); assert(classify(root).type === 'ad'); });
+  fixtures.replaceChildren(); document.getElementById('summary').textContent = `广告专项：通过 ${passed} · 失败 ${failedCount}`;
 });

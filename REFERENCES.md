@@ -36,3 +36,7 @@
 8. Chrome declarativeNetRequest 官方文档
    https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest
    评估结果：可匹配请求并阻断，但不能按推荐 JSON 中的广告条目选择性删除响应内容。v0.2.0 未加入此权限或阻断规则，避免误伤共用推荐请求。
+
+9. 当前抖音推荐页直接 DOM 检查（2026-10-07）
+   https://www.douyin.com/?recommend=1
+   在已渲染的汽车广告作者区观察到 `.account > svg`，viewBox 为 `0 0 30 16`，由 path 绘制“广告”，没有 DOM 文本；昵称真实文字在 `.account-name-text` 内。v0.3.1 增加该已观察字形的匹配和昵称文字之外的独立标签支持。用户截图中的魔兽世界广告已离开当前推荐页，未核实同一条广告的 DOM；不据此断言其具体漏跳原因。

@@ -109,8 +109,33 @@
       return (el.children.length <= 2 && text.length <= 10 && pattern.test(text)) || pattern.test(aria);
     });
   }
+  // Known visible 广告 glyph observed in the public recommendation UI on 2026-10-07.
+  // Compare vector content rather than depending only on one viewBox value.
+  const AD_GLYPH = 'M9.492 2.004L8.22 2.22c.216.336.408.72.588 1.128h-4.38v3.636c-.024 2.34-.348 4.176-.972 5.496l.96.852c.744-1.596 1.128-3.708 1.164-6.348V4.452h8.796V3.348h-4.308a16.717 16.717 0 0 0-.576-1.344zm15.564 6.672h-8.04v4.548h1.152v-.576h5.736v.576h1.152V8.676zm-6.888 2.904V9.756h5.736v1.824h-5.736zm-.276-6.732h2.688v1.656h-5.04V7.62h10.92V6.504h-4.74V4.848h3.828V3.756H21.72V2.148h-1.14v1.608h-2.016c.204-.408.372-.852.516-1.32l-1.128-.144c-.384 1.248-1.104 2.292-2.16 3.144l.684.9a8.301 8.301 0 0 0 1.416-1.488z'.replace(/[\s,]+/g, '');
+  const AD_EXCLUDED = '[data-e2e="video-desc"], [data-e2e="video-avatar"], [data-e2e="live-avatar"], [data-e2e*="comment"], [role="dialog"], #dy-cleaner-ui';
+  function adNodes(root, selector) {
+    const nodes = Array.from(root.querySelectorAll(selector));
+    if (root.matches(selector)) nodes.unshift(root);
+    return nodes.filter(el => {
+      if (!visible(el) || el.closest(AD_EXCLUDED)) return false;
+      const author = el.closest(SELECTORS.author);
+      if (!author) return true;
+      // An explicit ad node is distinct from the nickname, even inside its wrapper.
+      if (el !== author && el.matches(SELECTORS.ad)) return true;
+      const nameText = author.querySelector('.account-name-text');
+      return Boolean(el !== author && nameText && !nameText.contains(el) && !el.contains(nameText));
+    });
+  }
+  function adLabel(root) {
+    return adNodes(root, `${LABEL_NODES}, svg`).find(el => {
+      const text = cleanText(el.textContent);
+      const aria = cleanText(el.getAttribute('aria-label'));
+      return (el.children.length <= 2 && text.length <= 10 && AD_LABEL.test(text)) || AD_LABEL.test(aria);
+    });
+  }
   function authorInfo(root) {
-    const name = cleanText(root.querySelector(SELECTORS.author)?.textContent).replace(/^@/, '');
+    const nameNode = root.querySelector(SELECTORS.author);
+    const name = cleanText((nameNode?.querySelector('.account-name-text') || nameNode)?.textContent).replace(/^@/, '');
     for (const link of root.querySelectorAll(SELECTORS.authorLink)) {
       try {
         const url = new URL(link.getAttribute('href'), 'https://www.douyin.com');
@@ -128,18 +153,20 @@
     if (signalNodes(root, SELECTORS.live).length) add('live', 'live-card', '直播卡片标识');
     else if (findLabel(root, LIVE_ENTRY)) add('live', 'live-entry', '进入直播间入口');
     if (options.apiDetection && metadata?.ad === true) add('ad', 'ad-api', '推荐接口明确标记为广告');
-    if (signalNodes(root, SELECTORS.ad).length) add('ad', 'ad-node', '广告专用节点');
+    if (adNodes(root, SELECTORS.ad).length) add('ad', 'ad-node', '广告专用节点');
     else {
       let label = null;
       for (const zone of root.querySelectorAll(SELECTORS.metadata)) {
-        label = findLabel(zone, AD_LABEL);
+        label = adLabel(zone);
         if (label) break;
       }
-      // Accessible explicit tags elsewhere, excluding captions, author names and comments.
-      label ||= signalNodes(root, '[aria-label]').find(el => AD_LABEL.test(cleanText(el.getAttribute('aria-label'))));
+      // Accessible explicit tags elsewhere; nickname text, captions and comments stay excluded.
+      label ||= adNodes(root, '[aria-label]').find(el => AD_LABEL.test(cleanText(el.getAttribute('aria-label'))));
       if (label) add('ad', 'ad-label', cleanText(label.getAttribute('aria-label') || label.textContent));
       else if (options.iconDetection) {
-        const icon = signalNodes(root, '.account svg[viewBox="0 0 30 16"]').find(el => !el.closest(SELECTORS.author));
+        const icon = adNodes(root, '.account svg').find(el =>
+          Array.from(el.querySelectorAll('path[d]')).some(path => path.getAttribute('d').replace(/[\s,]+/g, '') === AD_GLYPH) ||
+          cleanText(el.getAttribute('viewBox')).split(/[\s,]+/).map(Number).join(' ') === '0 0 30 16');
         if (icon) add('ad', 'ad-account-icon', '作者信息区的广告图标（兼容规则）');
       }
     }

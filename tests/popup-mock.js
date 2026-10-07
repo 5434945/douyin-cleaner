@@ -2,7 +2,7 @@
 const popupData = { settings: { enabled: true, skipAds: true, skipLive: true, skipShopping: false, showNotice: true, iconDetection: true, skipDelay: 250, settingsRevision: 1, whitelist: [] }, stats: { ad: 12, live: 8, shopping: 0 } };
 const listeners = [];
 window.chrome = {
-    runtime: { getManifest: () => ({ version: '0.3.0' }), async sendMessage(message) {
+    runtime: { getManifest: () => ({ version: '0.3.1' }), async sendMessage(message) {
     if (message.action === 'patchSettings') { const previous = { ...popupData.settings }; Object.assign(popupData.settings, message.patch); for (const fn of listeners) fn({ settings: { oldValue: previous, newValue: popupData.settings } }, 'local'); }
     if (message.action === 'resetStats') { popupData.stats = { ad: 0, live: 0, shopping: 0, blocked: 0, failures: 0 }; for (const fn of listeners) fn({ stats: { newValue: popupData.stats } }, 'local'); }
     return { ok: true };

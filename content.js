@@ -113,7 +113,7 @@
     observer.disconnect();
     watchedFeed = feed;
     if (feed) observer.observe(feed, { subtree: true, childList: true, characterData: true, attributes: true,
-      attributeFilter: ['data-e2e', 'data-e2e-vid', 'data-e2e-aweme-id', 'data-room-id', 'data-active', 'src', 'href', 'aria-label', 'aria-hidden', 'class'] });
+      attributeFilter: ['data-e2e', 'data-e2e-vid', 'data-e2e-aweme-id', 'data-aweme-id', 'data-room-id', 'data-active', 'src', 'href', 'aria-label', 'viewBox', 'd', 'aria-hidden', 'class'] });
   }
   function ensureUI() {
     if (uiHost?.isConnected) return;

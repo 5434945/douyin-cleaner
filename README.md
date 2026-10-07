@@ -1,12 +1,12 @@
-# 抖音清爽刷 v0.3.0
+# 抖音清爽刷 v0.3.1
 
-[下载 v0.3.0 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.3.0/douyin-cleaner-v0.3.0.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
+[下载 v0.3.1 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.3.1/douyin-cleaner-v0.3.1.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
 
 Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 中，自动跳过有明确页面标识或接口广告标记的广告、推广和直播推荐。商品卡、购买入口可用单独开关过滤。
 
 ## 安装（约 1 分钟）
 
-1. 将 `douyin-cleaner-v0.3.0.zip` 解压到一个长期保留的文件夹。
+1. 将 `douyin-cleaner-v0.3.1.zip` 解压到一个长期保留的文件夹。
 2. Chrome 打开 `chrome://extensions`；Edge 打开 `edge://extensions`。
 3. 开启页面上的「开发者模式」。
 4. 点击「加载已解压的扩展程序」（部分 Edge 版本称「加载解压缩的扩展」）。
@@ -121,3 +121,7 @@ Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 
 开发者验证：安装 Node.js 后，在此文件夹执行 `node --test tests/core.test.cjs tests/feed.test.cjs`；执行 `node tests/serve.mjs` 后打开 http://127.0.0.1:8765/tests/fixture.html ，点击「运行全部测试」。打开 http://127.0.0.1:8765/tests/speed.html ，点击「准备测量」后按向下方向键，可测量跳过响应。测试页模拟浏览器扩展消息和存储，执行交付的核心、内容、后台脚本；不能代替浏览器扩展真实安装和抖音各账号实测。
 
 许可证见 `LICENSE`，公开参考来源见 `REFERENCES.md`，本版验证情况见 `TEST-REPORT.md`。
+
+## v0.3.1 广告徽标漏检修复
+
+独立广告标签可嵌套在昵称容器中，仍排除真实昵称文字；支持 SVG 明确文字标签和实站已观察的广告字形，避免只依赖一个 viewBox。保留广告开关、图标兼容开关、白名单、放行及输入暂停保护。解压更新后须在 Chrome 扩展管理页重新加载插件，再刷新抖音。
