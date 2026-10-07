@@ -148,6 +148,48 @@ document.getElementById('run').addEventListener('click', async event => {
   await check('节点复用后继续识别下一条广告', async () => { await reset([item('ad'), item('promo'), item()]); model.reuse = true; await until(() => storageData.stats.ad === 2); assert(model.index === 2 && model.clicks === 2); });
   await check('作者加入白名单后立即保留', async () => { await reset([item('ad'), item()], { skipDelay: 1000 }); assert((await pageAction('whitelist')).ok); await delay(1250); assert(model.index === 0 && storageData.settings.whitelist[0].id === 'MS4w.author'); });
   await check('网页暂停消息可持久保存设置', async () => { await reset([item('ad'), item()], { showNotice: true }); await until(() => storageData.stats.ad === 1); await fixtureDispatch({ target: 'dy-cleaner-background', action: 'setEnabledFromPage', enabled: false }, true); assert(storageData.settings.enabled === false); });
+  const metadata = items => window.postMessage({ channel: DouyinCleanerFeed.CHANNEL, kind: 'records', items }, location.origin);
+  const numericItem = () => ({ ...item(), id: String(900000 + sequence) });
+  await check('接口标记匹配当前 ID 时，无可见广告标签也跳过', async () => {
+    const ad = numericItem(); await reset([ad, item()]); metadata([{ id: ad.id, ad: true }]);
+    await until(() => storageData.stats.ad === 1); assert(model.index === 1);
+  });
+  await check('预加载下一条接口广告，不误跳当前正常视频', async () => {
+    const normal = numericItem(), ad = numericItem(); await reset([normal, ad]); metadata([{ id: ad.id, ad: true }]);
+    await delay(650); assert(model.index === 0 && model.clicks === 0);
+  });
+  await check('接口标记受广告开关、接口开关、白名单保护', async () => {
+    for (const patch of [{ apiDetection: false }, { skipAds: false }, { whitelist: [{ id: 'MS4w.author', name: '作者' }] }]) {
+      const ad = numericItem(); await reset([ad, item()], patch); metadata([{ id: ad.id, ad: true }]);
+      await delay(600); assert(model.index === 0 && model.clicks === 0);
+    }
+  });
+  await check('接口 false 更新撤销等待中的广告判断', async () => {
+    const ad = numericItem(); await reset([ad, item()], { skipDelay: 1000 }); metadata([{ id: ad.id, ad: true }]);
+    await delay(100); metadata([{ id: ad.id, ad: false }]); await delay(1100); assert(model.clicks === 0);
+  });
+  await check('切换时遮挡静音，暂停后恢复原本音量状态', async () => {
+    await reset([item('ad'), item()]); model.navigationWorks = false;
+    const video = document.createElement('video'); cardsNode.firstElementChild.append(video);
+    await until(() => Boolean(document.getElementById('dy-cleaner-shield'))); assert(video.muted);
+    await settingsPatch({ enabled: false }); assert(!video.muted && !document.getElementById('dy-cleaner-shield'));
+  });
+  await check('切换失败后移除遮挡，保留原本静音状态', async () => {
+    await reset([item('ad'), item()]); model.navigationWorks = false;
+    const video = document.createElement('video'); video.muted = true; cardsNode.firstElementChild.append(video);
+    await until(() => storageData.stats.failures === 1); assert(video.muted && !document.getElementById('dy-cleaner-shield'));
+  });
+  await check('成功切换后恢复旧播放器，不影响下一条播放器', async () => {
+    await reset([item('ad'), item()]);
+    const video = document.createElement('video'); cardsNode.firstElementChild.append(video);
+    await until(() => storageData.stats.ad === 1); assert(!video.muted && !document.getElementById('dy-cleaner-shield'));
+  });
+  await check('遮挡开关关闭仍可跳过广告，不改变视频静音', async () => {
+    await reset([item('ad'), item()], { shieldAds: false }); model.navigationWorks = false;
+    const video = document.createElement('video'); cardsNode.firstElementChild.append(video);
+    await until(() => model.clicks === 1); assert(!video.muted && !document.getElementById('dy-cleaner-shield'));
+    await settingsPatch({ enabled: false });
+  });
   await reset([item(), item('ad'), item()], { skipDelay: 800, showNotice: true });
   document.getElementById('summary').textContent = `已完成 · 通过 ${passed} · 失败 ${failedCount} · 总计 ${passed + failedCount}`;
   document.getElementById('summary').dataset.result = failedCount ? 'fail' : 'pass';

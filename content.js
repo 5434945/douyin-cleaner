@@ -1,6 +1,45 @@
 (function () {
   "use strict";
   const Core = DouyinCleanerCore;
+  const Feed = DouyinCleanerFeed;
+  const feedRecords = new Map();
+  let shield = null;
+  function configureCapture() {
+    const enabled = settings.enabled && settings.apiDetection && settings.skipAds && Core.supportedPage(location.href);
+    if (!enabled) feedRecords.clear();
+    window.postMessage({ channel: Feed.CHANNEL, kind: 'configure', enabled }, location.origin);
+  }
+  window.addEventListener('message', event => {
+    if (event.source !== window || event.origin !== location.origin || event.data?.channel !== Feed.CHANNEL || event.data.kind !== 'records' || !settings.enabled || !settings.apiDetection || !settings.skipAds || !Core.supportedPage(location.href)) return;
+    const items = Feed.validate(event.data.items);
+    if (!items) return;
+    for (const item of items) { feedRecords.delete(item.id); feedRecords.set(item.id, { ad: item.ad, expires: Date.now() + 600000 }); }
+    while (feedRecords.size > 500) feedRecords.delete(feedRecords.keys().next().value);
+    schedule(0);
+  });
+  function classify(root, key) {
+    const match = key.match(/^data-(?:e2e-vid|e2e-aweme-id|aweme-id):(\d{1,30})$/);
+    const record = match && feedRecords.get(match[1]);
+    return Core.classify(root, settings, record?.expires > Date.now() ? record : null);
+  }
+  function clearShield() {
+    if (!shield) return;
+    const previous = shield; shield = null;
+    clearTimeout(previous.timeout); previous.host.remove();
+    for (const [video, muted] of previous.videos) if (video.muted === true) video.muted = muted;
+  }
+  function showShield(root) {
+    clearShield();
+    if (!settings.shieldAds) return;
+    const rect = root.getBoundingClientRect();
+    const host = document.createElement('div'); host.id = 'dy-cleaner-shield';
+    host.style.cssText = `position:fixed;pointer-events:none;z-index:2147483646;background:#111;color:#ddd;display:flex;align-items:center;justify-content:center;font:14px system-ui;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px`;
+    host.textContent = '正在跳过广告';
+    const videos = Array.from(root.querySelectorAll('video'), video => [video, video.muted]);
+    shield = { host, videos, root, key: Core.identity(root), timeout: setTimeout(clearShield, 4200) };
+    document.documentElement.appendChild(host);
+    for (const [video] of videos) video.muted = true;
+  }
   const labels = { ad: '广告 / 推广', live: '直播推荐', shopping: '带货视频' };
   let settings = Core.normalizeSettings();
   let ready = false;
@@ -92,17 +131,17 @@
     clearTimeout(noticeTimer);
     noticeTimer = setTimeout(() => { if (ui) ui.box.hidden = true; }, canUndo ? 6000 : 4500);
   }
-  function cancelTransaction() { transaction = null; }
+  function cancelTransaction() { clearShield(); transaction = null; }
   function updateCurrent(root, now) {
     if (!root) { current = null; return; }
     const key = Core.identity(root);
     const top = root.getBoundingClientRect().top;
     if (!current || current.key !== key || current.root !== root) {
-      current = { root, key, since: now, top, detection: Core.classify(root, settings) };
+      current = { root, key, since: now, top, detection: classify(root, key) };
     } else {
       if (Math.abs(top - current.top) > 6) current.since = now;
       current.top = top;
-      current.detection = Core.classify(root, settings);
+      current.detection = classify(root, key);
     }
   }
   function navigate(tx, fallback = false) {
@@ -122,6 +161,7 @@
     return true;
   }
   function completeTransaction(tx) {
+    clearShield();
     transaction = null;
     if (tx.kind === 'skip') {
       lastSkipped = { key: tx.from, destination: current.key, reason: tx.reason };
@@ -133,6 +173,7 @@
   }
   function storageFailure() {
     settings.enabled = false;
+    configureCapture();
     cancelTransaction();
     status = '插件连接中断，请刷新抖音页面';
     notice(status, false, true);
@@ -141,7 +182,7 @@
     if (!ready || stopped) return;
     const now = Date.now();
     if (location.href !== route) {
-      route = location.href; current = null; lastSkipped = null; cancelTransaction();
+      route = location.href; configureCapture(); current = null; lastSkipped = null; cancelTransaction();
       if (ui) ui.box.hidden = true;
     }
     if (!Core.supportedPage(location.href)) {
@@ -151,6 +192,7 @@
     const root = Core.activeCard();
     refreshObserver(root);
     updateCurrent(root, now);
+    if (shield && (root !== shield.root || current?.key !== shield.key)) clearShield();
     if (!settings.enabled && transaction?.kind !== 'undo') { status = '已暂停自动过滤'; cancelTransaction(); return; }
     if (isEditingOrModal()) { status = '正在输入或有弹窗，暂停过滤'; cancelTransaction(); return; }
     if (now < manualUntil) { status = '手动操作中'; schedule(manualUntil - now); return; }
@@ -192,6 +234,7 @@
     status = `正在跳过${labels[current.detection.type]}`;
     const tx = { kind: 'skip', from: current.key, reason: current.detection, direction: 'next', attempts: 0, attemptedAt: now };
     transaction = tx;
+    if (tx.reason.type === 'ad') showShield(current.root);
     if (!navigate(tx)) cancelTransaction();
     schedule(40);
   }
@@ -255,6 +298,7 @@
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes.settings) return;
     settings = Core.normalizeSettings(changes.settings.newValue);
+    configureCapture();
     cancelTransaction();
     if (current) current.since = Date.now();
     if (!settings.enabled && ui) ui.box.hidden = true;
@@ -267,8 +311,9 @@
   const heartbeat = setInterval(() => schedule(0), 400);
   window.addEventListener('pagehide', event => {
     observer.disconnect(); watchedFeed = null; cancelTransaction();
+    window.postMessage({ channel: Feed.CHANNEL, kind: 'configure', enabled: false }, location.origin);
     if (!event.persisted) { stopped = true; clearInterval(heartbeat); clearTimeout(timer); clearTimeout(noticeTimer); }
   });
-  window.addEventListener('pageshow', () => { current = null; schedule(100); });
-  chrome.storage.local.get('settings').then(data => { settings = Core.normalizeSettings(data.settings); ready = true; schedule(0); }).catch(storageFailure);
+  window.addEventListener('pageshow', () => { configureCapture(); current = null; schedule(100); });
+  chrome.storage.local.get('settings').then(data => { settings = Core.normalizeSettings(data.settings); ready = true; configureCapture(); schedule(0); }).catch(storageFailure);
 })();

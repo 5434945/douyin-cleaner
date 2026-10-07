@@ -117,5 +117,5 @@ test('Manifest 限定抖音域名，所有脚本和 UI 资源存在', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.deepEqual(manifest.permissions, ['storage']);
   assert.equal(manifest.content_scripts[0].matches.includes('<all_urls>'), false);
-  for (const file of [...manifest.content_scripts[0].js, ...manifest.content_scripts[0].css, manifest.background.service_worker, manifest.action.default_popup, ...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon)]) assert.ok(fs.existsSync(path.join(__dirname, '..', file)), file);
+  for (const file of [...manifest.content_scripts.flatMap(entry => [...entry.js, ...(entry.css || [])]), manifest.background.service_worker, manifest.action.default_popup, ...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon)]) assert.ok(fs.existsSync(path.join(__dirname, '..', file)), file);
 });

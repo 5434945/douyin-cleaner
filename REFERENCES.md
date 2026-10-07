@@ -24,3 +24,15 @@
    已观察到 `data-e2e="feed-item"`、`feed-active-video`、`data-e2e-vid`、`video-info`、`feed-video-nickname`、`video-desc`、`video-avatar`、`data-e2e="slideList"`、`video-switch-next-arrow`、`video-switch-prev-arrow`。
    注意：普通视频也含 `live-avatar`；不能用这个节点推断当前是直播。检查页面中未完成真实广告和直播卡片的完整覆盖验证。
    v0.1.2 复查：同账号推荐页还观察到普通视频的作者头像链接直接指向 `live.douyin.com/房间号`，并显示 LiveIcon。因此房间链接或 LiveIcon 本身不作为当前内容是直播的判断依据。本次未捕获用户反馈的真实直播推荐结构；新增兼容规则依据代码审核及本地复现，验证范围详见 TEST-REPORT.md。
+
+6. Chrome 官方 Manifest 内容脚本文档
+   https://developer.chrome.com/docs/extensions/reference/manifest/content-scripts
+   用途：document_start 与 MAIN 环境；原有页面操作留在隔离环境。
+
+7. Johnserf-Seed / TikTokDownload 的 APIv1.0 Wiki
+   https://github.com/Johnserf-Seed/TikTokDownload/wiki/APIv1.0
+   2023 年历史资料，展示推荐接口 `/aweme/v1/web/tab/feed/`、`aweme_list`、`aweme_id` 和 `is_ads`。仅用严格布尔广告标记作为补充信号，不能保证当前账号仍返回这些字段。
+
+8. Chrome declarativeNetRequest 官方文档
+   https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest
+   评估结果：可匹配请求并阻断，但不能按推荐 JSON 中的广告条目选择性删除响应内容。v0.2.0 未加入此权限或阻断规则，避免误伤共用推荐请求。

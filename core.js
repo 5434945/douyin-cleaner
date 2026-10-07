@@ -3,7 +3,7 @@
   "use strict";
   const DEFAULTS = Object.freeze({
     enabled: true, skipAds: true, skipLive: true, skipShopping: false,
-    showNotice: true, iconDetection: true, skipDelay: 250, settingsRevision: 1, whitelist: []
+    showNotice: true, iconDetection: true, apiDetection: true, shieldAds: true, skipDelay: 250, settingsRevision: 1, whitelist: []
   });
   const SELECTORS = Object.freeze({
     cards: '[data-e2e="feed-item"]',
@@ -28,7 +28,7 @@
   function normalizeSettings(value = {}) {
     if (!value || typeof value !== 'object') value = {};
     const settings = { ...DEFAULTS };
-    for (const key of ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection']) {
+    for (const key of ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds']) {
       if (typeof value[key] === 'boolean') settings[key] = value[key];
     }
     if (Number.isFinite(value.skipDelay)) {
@@ -88,12 +88,13 @@
     }
     return { id: '', name };
   }
-  function classify(root, options = DEFAULTS) {
+  function classify(root, options = DEFAULTS, metadata = null) {
     const reasons = [];
     const author = authorInfo(root);
     const add = (type, rule, evidence) => reasons.push({ type, rule, evidence });
     if (signalNodes(root, SELECTORS.live).length) add('live', 'live-card', '直播卡片标识');
     else if (findLabel(root, LIVE_ENTRY)) add('live', 'live-entry', '进入直播间入口');
+    if (options.apiDetection && metadata?.ad === true) add('ad', 'ad-api', '推荐接口明确标记为广告');
     if (signalNodes(root, SELECTORS.ad).length) add('ad', 'ad-node', '广告专用节点');
     else {
       let label = null;
