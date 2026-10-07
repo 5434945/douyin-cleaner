@@ -1,7 +1,7 @@
 "use strict";
 const Core = DouyinCleanerCore;
 const $ = id => document.getElementById(id);
-const settingKeys = ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds'];
+const settingKeys = ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters'];
 let settings = Core.normalizeSettings();
 let stats = {};
 let pageStatus = null;
@@ -22,6 +22,7 @@ function renderSettings() {
   for (const key of settingKeys) $(key).checked = settings[key];
   $('skipDelay').value = settings.skipDelay;
   $('delay-value').value = `${settings.skipDelay} ms`;
+  renderBlacklist();
   $('authors').replaceChildren();
   $('empty-authors').hidden = settings.whitelist.length > 0;
   for (const author of settings.whitelist) {
@@ -35,8 +36,34 @@ function renderSettings() {
     row.append(name, remove); $('authors').append(row);
   }
 }
+function renderBlacklist() {
+  $('blocked-authors').replaceChildren(); $('empty-blocked').hidden = settings.blacklist.length > 0;
+  for (const author of settings.blacklist) {
+    const row = document.createElement('li'), name = document.createElement('span'), remove = document.createElement('button');
+    name.textContent = author.name || author.id; name.title = author.id;
+    remove.type = 'button'; remove.textContent = '移除'; remove.setAttribute('aria-label', `移除黑名单作者 ${name.textContent}`);
+    remove.addEventListener('click', () => background('patchSettings', { patch: { blacklist: settings.blacklist.filter(item => item.id !== author.id), collectionExclusions: [...settings.collectionExclusions.filter(id => id !== author.id), author.id].slice(-1000) } }).then(() => feedback('已移除该作者，并停止自动收录该作者。')).catch(error => feedback(error.message, true)));
+    if (author.evidence) {
+      const link = document.createElement('a'); link.href = author.evidence.source; link.textContent = '依据'; link.target = '_blank'; link.rel = 'noopener noreferrer'; row.append(name, link, remove);
+    } else row.append(name, remove);
+    $('blocked-authors').append(row);
+  }
+}
+function downloadJSON(value, filename) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+$('import-blocklist').addEventListener('click', async () => {
+  try {
+    const items = Core.parseBlacklist($('blacklist-input').value);
+    const merged = Core.normalizeAuthors([...settings.blacklist, ...items.map(item => { const previous = settings.blacklist.find(entry => entry.id === item.id); return { ...previous, ...item, name: item.name || previous?.name || '' }; })], 1001);
+    if (merged.length > 1000) throw new Error('合并后超过 1000 个作者，请先移除部分名单。');
+    await background('patchSettings', { patch: { blacklist: merged, collectionExclusions: settings.collectionExclusions.filter(id => !items.some(item => item.id === id)) } }); $('blacklist-input').value = ''; feedback(`已合并 ${items.length} 个作者，黑名单共 ${merged.length} 个。`);
+  } catch (error) { feedback(error.message, true); }
+});
+$('export-blocklist').addEventListener('click', () => downloadJSON({ version: 1, authors: settings.blacklist }, 'douyin-cleaner-blacklist.json'));
 function renderStats() {
-  for (const key of ['ad', 'live', 'shopping']) $(`${key}-count`).textContent = Math.max(0, Number(stats[key]) || 0).toLocaleString('zh-CN');
+  for (const key of ['ad', 'live', 'shopping', 'blocked']) $(`${key}-count`).textContent = Math.max(0, Number(stats[key]) || 0).toLocaleString('zh-CN');
 }
 function diagnosticData() {
   return {
@@ -78,6 +105,7 @@ async function refreshStatus() {
     $('status-dot').classList.toggle('active', Boolean(usable && settings.enabled));
     $('allow').disabled = !usable;
     $('undo').disabled = !pageStatus?.canUndo;
+    $('block').disabled = !usable || !pageStatus?.current?.author?.id;
     $('whitelist').disabled = !usable || !pageStatus?.current?.author?.id;
     $('diagnostics').textContent = JSON.stringify(diagnosticData(), null, 2);
     busy = false;
@@ -86,10 +114,10 @@ async function refreshStatus() {
 for (const key of settingKeys) $(key).addEventListener('change', () => background('patchSettings', { patch: { [key]: $(key).checked } }).catch(error => { feedback(error.message, true); renderSettings(); }));
 $('skipDelay').addEventListener('input', () => { $('delay-value').value = `${$('skipDelay').value} ms`; });
 $('skipDelay').addEventListener('change', () => background('patchSettings', { patch: { skipDelay: Number($('skipDelay').value) } }).catch(error => feedback(error.message, true)));
-for (const action of ['allow', 'undo', 'whitelist']) $(action).addEventListener('click', async () => {
+for (const action of ['allow', 'undo', 'whitelist', 'block']) $(action).addEventListener('click', async () => {
   try {
     await pageMessage(action);
-    feedback(({ allow: '本条已放行 10 分钟。', undo: '正在返回，目标内容已放行。', whitelist: '已加入作者白名单。' })[action]);
+    feedback(({ allow: '本条已放行 10 分钟。', undo: '正在返回，目标内容已放行。', whitelist: '已加入作者白名单。', block: '已屏蔽当前作者，可在黑名单中移除。' })[action]);
     await refreshStatus();
   } catch (error) { feedback(error.message, true); }
 });

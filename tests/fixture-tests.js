@@ -23,7 +23,7 @@ function cardHTML(entry, active = true) {
   const marker = { normal: '', ad: '<span class="badge">广告</span>', promo: '<span class="badge">推广</span>', icon: '<svg viewBox="0 0 30 16"><rect width="30" height="16" fill="white"/></svg>', live: '<div data-e2e="feed-live"><a href="https://live.douyin.com/123456">进入直播间</a></div>', shopping: '<div data-e2e="product-card">商品卡</div>' }[entry.kind] || '';
   const meta = ['ad', 'promo', 'icon'].includes(entry.kind) ? marker : '';
   const main = ['live', 'shopping'].includes(entry.kind) ? marker : '';
-  return `<div class="card" data-e2e="feed-item"><div data-e2e="${active ? 'feed-active-video' : 'feed-video'}" data-e2e-vid="${entry.id}"><h2>模拟${entry.kind}内容</h2><a data-e2e="video-avatar" href="https://www.douyin.com/user/MS4w.author"><span data-e2e="live-avatar">头像</span></a>${main}<div data-e2e="video-info"><div class="account"><span data-e2e="feed-video-nickname">@普通作者</span>${meta}<span class="time">昨天</span></div><div data-e2e="video-desc">普通视频的简介 ${entry.extra}</div></div></div></div>`;
+  return `<div class="card" data-e2e="feed-item"><div data-e2e="${active ? 'feed-active-video' : 'feed-video'}" data-e2e-vid="${entry.id}"><h2>模拟${entry.kind}内容</h2><a data-e2e="video-avatar" href="https://www.douyin.com/user/${entry.authorId || 'MS4w.author'}"><span data-e2e="live-avatar">头像</span></a>${main}<div data-e2e="video-info"><div class="account"><span data-e2e="feed-video-nickname">@普通作者</span>${meta}<span class="time">昨天</span></div><div data-e2e="video-desc">普通视频的简介 ${entry.extra}</div></div></div></div>`;
 }
 function render() {
   if (model.reuse && cardsNode.firstElementChild && model.items[model.index]) {
@@ -189,6 +189,67 @@ document.getElementById('run').addEventListener('click', async event => {
     const video = document.createElement('video'); cardsNode.firstElementChild.append(video);
     await until(() => model.clicks === 1); assert(!video.muted && !document.getElementById('dy-cleaner-shield'));
     await settingsPatch({ enabled: false });
+  });
+  const blockedAuthor = { id: 'MS4w.author', name: '作者' };
+  await check('黑名单作者普通视频自动跳过并独立计数', async () => {
+    await reset([item(), item()], { blacklist: [blockedAuthor] });
+    // Destination belongs to another author.
+    model.items[1].authorId = 'MS4w.destination';
+    await until(() => storageData.stats.blocked === 1);
+    await settingsPatch({ enabled: false }); assert(model.index === 1 && storageData.stats.ad === 0);
+  });
+  await check('黑名单直播不依赖全局直播开关', async () => {
+    await reset([item('live'), item()], { blacklist: [blockedAuthor], skipLive: false });
+    await until(() => storageData.stats.blocked === 1); await settingsPatch({ enabled: false }); assert(model.index === 1);
+  });
+  await check('关闭黑名单开关保留作者普通内容', async () => {
+    await reset([item(), item()], { blacklist: [blockedAuthor], skipBlocked: false }); await delay(700); assert(model.index === 0 && model.clicks === 0);
+  });
+  await check('同昵称不同作者 ID 不被黑名单误伤', async () => {
+    await reset([item(), item()], { blacklist: [{ id: 'MS4w.someone-else', name: '普通作者' }] }); await delay(700); assert(model.clicks === 0);
+  });
+  await check('白名单和本条放行优先于黑名单', async () => {
+    await reset([item(), item()], { blacklist: [blockedAuthor], whitelist: [blockedAuthor] }); await delay(650); assert(model.clicks === 0);
+    await reset([item(), item()], { blacklist: [blockedAuthor], skipDelay: 1000 }); await pageAction('allow'); await delay(1100); assert(model.clicks === 0);
+  });
+  await check('移除黑名单立即取消等待中的屏蔽', async () => {
+    await reset([item(), item()], { blacklist: [blockedAuthor], skipDelay: 1000 }); await delay(100); await settingsPatch({ blacklist: [] }); await delay(1100); assert(model.clicks === 0);
+  });
+  await check('一键屏蔽当前作者可保存并触发跳过', async () => {
+    await reset([item(), item()], { blacklist: [] }); assert((await pageAction('block')).ok);
+    await until(() => storageData.stats.blocked === 1); await settingsPatch({ enabled: false }); assert(storageData.settings.blacklist.some(item => item.id === blockedAuthor.id));
+  });
+  await check('品牌广告明确标记自动收录并保存证据、跳过', async () => {
+    const ad = numericItem(); ad.kind = 'ad'; ad.extra = '#华为 #鸿蒙'; await reset([ad, item()], { blacklist: [] });
+    cardsNode.firstElementChild.append(document.createElement('video'));
+    await until(() => storageData.stats.blocked === 1); await settingsPatch({ enabled: false });
+    const saved = storageData.settings.blacklist.find(item => item.id === blockedAuthor.id);
+    assert(saved?.evidence?.basis === 'ad-label' && saved.evidence.source === `https://www.douyin.com/video/${ad.id}`);
+  });
+  await check('无页面广告标签但明确合作推广披露可自动收录', async () => {
+    const ad = numericItem(); ad.extra = '#享界s9t合作推广'; await reset([ad, item()], { blacklist: [] });
+    cardsNode.firstElementChild.append(document.createElement('video'));
+    await until(() => storageData.stats.blocked === 1); await settingsPatch({ enabled: false });
+    assert(storageData.settings.blacklist[0].evidence.basis === 'caption-disclosure');
+  });
+  await check('只提品牌、收录关闭、手动移除排除项均不自动加名单', async () => {
+    for (const patch of [{}, { collectBrandPromoters: false }, { collectionExclusions: [blockedAuthor.id] }]) {
+      const ad = numericItem(); ad.extra = Object.keys(patch).length ? '#享界s9t合作推广' : '华为手机正常体验';
+      await reset([ad, item()], { blacklist: [], ...patch }); cardsNode.firstElementChild.append(document.createElement('video'));
+      await delay(650); assert(storageData.settings.blacklist.length === 0 && model.clicks === 0);
+    }
+  });
+  await check('缺少视频 ID 或作者 ID 时不自动收录', async () => {
+    const ad = item(); ad.extra = '#享界s9t合作推广'; await reset([ad, item()], { blacklist: [] }); cardsNode.firstElementChild.append(document.createElement('video'));
+    await delay(650); assert(storageData.settings.blacklist.length === 0);
+    const numeric = numericItem(); numeric.extra = '#享界s9t合作推广'; await reset([numeric, item()], { blacklist: [] }); cardsNode.firstElementChild.append(document.createElement('video'));
+    cardsNode.querySelector('[data-e2e="video-avatar"]').remove(); await delay(650); assert(storageData.settings.blacklist.length === 0);
+  });
+  await check('白名单及本条放行阻止自动收录推广作者', async () => {
+    const ad = numericItem(); ad.extra = '#享界s9t合作推广'; await reset([ad, item()], { blacklist: [], whitelist: [blockedAuthor] }); cardsNode.firstElementChild.append(document.createElement('video'));
+    await delay(650); assert(storageData.settings.blacklist.length === 0);
+    const other = numericItem(); other.extra = '#享界s9t合作推广'; await reset([other, item()], { blacklist: [], skipDelay: 1000 }); cardsNode.firstElementChild.append(document.createElement('video'));
+    await pageAction('allow'); await delay(1100); assert(storageData.settings.blacklist.length === 0);
   });
   await reset([item(), item('ad'), item()], { skipDelay: 800, showNotice: true });
   document.getElementById('summary').textContent = `已完成 · 通过 ${passed} · 失败 ${failedCount} · 总计 ${passed + failedCount}`;

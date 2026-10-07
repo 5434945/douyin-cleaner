@@ -1,6 +1,6 @@
 (() => {
 "use strict";
-importScripts('core.js');
+importScripts('blocked-authors.js', 'core.js');
 const Core = DouyinCleanerCore;
 let queue = Promise.resolve();
 function serialize(fn) {
@@ -11,7 +11,7 @@ function serialize(fn) {
 async function initialize() {
   const data = await chrome.storage.local.get(['settings', 'stats']);
   const update = { settings: Core.normalizeSettings(data.settings) };
-  if (!data.stats) update.stats = { ad: 0, live: 0, shopping: 0, failures: 0 };
+  if (!data.stats) update.stats = { ad: 0, live: 0, shopping: 0, blocked: 0, failures: 0 };
   await chrome.storage.local.set(update);
 }
 chrome.runtime.onInstalled.addListener(() => serialize(initialize));
@@ -32,10 +32,10 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     } catch { return; }
   }
   let job;
-  if (message.action === 'record' && ['ad', 'live', 'shopping', 'failures'].includes(message.type) && sender.tab) {
+  if (message.action === 'record' && ['ad', 'live', 'shopping', 'blocked', 'failures'].includes(message.type) && sender.tab) {
     job = () => updateStats(message.type, message.rule);
   } else if (message.action === 'resetStats' && !sender.tab) {
-    job = () => chrome.storage.local.set({ stats: { ad: 0, live: 0, shopping: 0, failures: 0 }, recent: [] });
+    job = () => chrome.storage.local.set({ stats: { ad: 0, live: 0, shopping: 0, blocked: 0, failures: 0 }, recent: [] });
   } else if (message.action === 'patchSettings' && !sender.tab) {
     job = async () => {
       const { settings } = await chrome.storage.local.get('settings');
@@ -46,12 +46,24 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       const { settings } = await chrome.storage.local.get('settings');
       await chrome.storage.local.set({ settings: Core.normalizeSettings({ ...settings, enabled: message.enabled }) });
     };
-  } else if (message.action === 'addAuthor' && sender.tab && typeof message.author?.id === 'string') {
+  } else if (['addAuthor', 'blockAuthor', 'collectPromoter'].includes(message.action) && sender.tab && typeof message.author?.id === 'string') {
     job = async () => {
       const { settings } = await chrome.storage.local.get('settings');
       const next = Core.normalizeSettings(settings);
-      next.whitelist = next.whitelist.filter(item => item.id !== message.author.id);
-      next.whitelist.push(message.author);
+      const collecting = message.action === 'collectPromoter';
+      if (collecting) {
+        const entry = Core.normalizeAuthors([{ ...message.author, evidence: message.evidence }])[0];
+        if (!entry?.evidence || !next.enabled || !next.skipBlocked || !next.collectBrandPromoters || next.collectionExclusions.includes(entry.id) || next.whitelist.some(item => item.id === entry.id)) return;
+        if (next.blacklist.some(item => item.id === entry.id)) return;
+        message = { ...message, author: entry };
+      }
+      const field = message.action !== 'addAuthor' ? 'blacklist' : 'whitelist';
+      if (next[field].length >= (field === 'blacklist' ? 1000 : 100) && !next[field].some(item => item.id === message.author.id)) throw new Error('作者名单已满');
+      next[field] = next[field].filter(item => item.id !== message.author.id);
+      next[field].push(message.author);
+      if (!collecting && field === 'blacklist') next.collectionExclusions = next.collectionExclusions.filter(id => id !== message.author.id);
+      const other = field === 'blacklist' ? 'whitelist' : 'blacklist';
+      next[other] = next[other].filter(item => item.id !== message.author.id);
       await chrome.storage.local.set({ settings: Core.normalizeSettings(next) });
     };
   }
@@ -62,7 +74,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 async function updateStats(type, rule) {
   const { stats = {}, recent = [] } = await chrome.storage.local.get(['stats', 'recent']);
   const next = {};
-  for (const key of ['ad', 'live', 'shopping', 'failures']) next[key] = Math.max(0, Number(stats[key]) || 0);
+  for (const key of ['ad', 'live', 'shopping', 'blocked', 'failures']) next[key] = Math.max(0, Number(stats[key]) || 0);
   next[type] += 1;
   // No video URL, caption, author, or account information is logged.
   const entries = Array.isArray(recent) ? recent.slice(-19) : [];

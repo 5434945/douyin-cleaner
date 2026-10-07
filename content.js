@@ -40,7 +40,7 @@
     document.documentElement.appendChild(host);
     for (const [video] of videos) video.muted = true;
   }
-  const labels = { ad: '广告 / 推广', live: '直播推荐', shopping: '带货视频' };
+  const labels = { ad: '广告 / 推广', live: '直播推荐', shopping: '带货视频', blocked: '黑名单作者' };
   let settings = Core.normalizeSettings();
   let ready = false;
   let stopped = false;
@@ -59,6 +59,21 @@
   let failUntil = 0;
   const allowed = new Map();
   const failed = new Set();
+  const collectingAuthors = new Set();
+  function collectCurrentPromoter() {
+    const author = current.detection.author;
+    if (!settings.skipBlocked || !settings.collectBrandPromoters || settings.blacklist.length >= 1000 || !current.root.querySelector('video') || !author.id || settings.collectionExclusions.includes(author.id) || settings.blacklist.some(item => item.id === author.id)) return false;
+    const match = current.key.match(/^data-(?:e2e-vid|e2e-aweme-id|aweme-id):(\d{1,30})$/);
+    if (!match) return false;
+    const text = Core.cleanText(current.root.querySelector(Core.SELECTORS.description)?.textContent);
+    const basis = Core.promotionEvidence(text, current.detection.reasons);
+    if (!basis) return false;
+    if (!collectingAuthors.has(author.id)) {
+      collectingAuthors.add(author.id);
+      sendBackground('collectPromoter', { author, evidence: { basis, source: `https://www.douyin.com/video/${match[1]}` } }).catch(storageFailure).finally(() => { collectingAuthors.delete(author.id); schedule(0); });
+    }
+    return true;
+  }
   const observer = new MutationObserver(() => schedule(60));
 
   function sendBackground(action, fields = {}) {
@@ -230,6 +245,7 @@
       schedule(Math.max(20, Math.min(80, Math.max(current.since + settings.skipDelay, failUntil) - now)));
       return;
     }
+    if (collectCurrentPromoter()) { status = '正在保存推广作者黑名单'; schedule(100); return; }
     if (!labels[current.detection.type]) { status = '检测中 · 保留当前内容'; return; }
     status = `正在跳过${labels[current.detection.type]}`;
     const tx = { kind: 'skip', from: current.key, reason: current.detection, direction: 'next', attempts: 0, attemptedAt: now };
@@ -286,12 +302,14 @@
       const key = root && Core.identity(root);
       if (!key) { reply({ ok: false, error: '未读取到当前内容，请进入推荐流。' }); return; }
       allowKey(key); cancelTransaction(); notice('本条已放行 10 分钟。', false, true); schedule(100); reply({ ok: true });
-    } else if (message.action === 'whitelist') {
+    } else if (['whitelist', 'block'].includes(message.action)) {
       const root = Core.activeCard();
       const author = root && Core.authorInfo(root);
       if (!author?.id) { reply({ ok: false, error: '没有读取到作者 ID，可先使用“本条放行”。' }); return; }
-      allowKey(Core.identity(root)); cancelTransaction();
-      sendBackground('addAuthor', { author }).then(result => reply(result), () => reply({ ok: false, error: '保存白名单失败，请刷新页面。' }));
+      if (message.action === 'whitelist') allowKey(Core.identity(root));
+      else allowed.delete(Core.identity(root));
+      cancelTransaction();
+      sendBackground(message.action === 'block' ? 'blockAuthor' : 'addAuthor', { author }).then(result => reply(result), () => reply({ ok: false, error: '保存作者名单失败，请刷新页面。' }));
       return true;
     }
   });

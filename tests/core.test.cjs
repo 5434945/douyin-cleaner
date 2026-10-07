@@ -41,6 +41,33 @@ test('白名单 ID 校验，名称作为纯文本，数量受限', () => {
   assert.equal(Core.normalizeSettings({ whitelist: Array.from({ length: 110 }, (_, i) => ({ id: `id${i}` })) }).whitelist.length, 100);
 });
 
+test('黑名单严格 ID 校验、去重、数量限制，空名单不恢复默认名单', () => {
+  assert.deepEqual(Core.normalizeSettings({ blacklist: [{ id: '../bad' }, { id: 'MS4w.good', name: '旧名称' }, { id: 'MS4w.good', name: '新名称' }] }).blacklist, [{ id: 'MS4w.good', name: '新名称' }]);
+  assert.equal(Core.normalizeSettings({ blacklist: Array.from({ length: 1001 }, (_, i) => ({ id: `id${i}` })) }).blacklist.length, 1000);
+  assert.deepEqual(Core.normalizeSettings({ blacklist: [] }).blacklist, []);
+  assert.equal(Core.normalizeSettings({ skipBlocked: false }).skipBlocked, false);
+});
+test('名单导入只接受稳定 ID JSON 或真实抖音 HTTPS 作者主页，不按昵称猜测', () => {
+  assert.deepEqual(Core.parseBlacklist('{"authors":[{"id":"MS4w.good","name":"作者","evidence":"ignored"}]}'), [{ id: 'MS4w.good', name: '作者' }]);
+  assert.deepEqual(Core.parseBlacklist('https://www.douyin.com/user/MS4w.good\nhttps://douyin.com/user/MS4w.good/'), [{ id: 'MS4w.good', name: '' }]);
+  for (const input of ['普通作者', 'https://douyin.com.evil.com/user/MS4w.good', 'https://www.douyin.com/video/123', '[{"id":"../bad"}]', '{}']) assert.throws(() => Core.parseBlacklist(input));
+});
+test('推广收录要求品牌与明确依据；排除单纯话题、评论、图标和商业关系讨论', () => {
+  assert.equal(Core.promotionEvidence('华为手机使用心得', []), null);
+  assert.equal(Core.promotionEvidence('华为是否找人合作推广？', []), null);
+  assert.equal(Core.promotionEvidence('华为 #花粉', [{ type: 'ad', rule: 'ad-account-icon' }]), null);
+  assert.equal(Core.promotionEvidence('无品牌广告', [{ type: 'ad', rule: 'ad-api' }]), null);
+  assert.equal(Core.promotionEvidence('#华为 #鸿蒙', [{ type: 'ad', rule: 'ad-api' }]), 'ad-api');
+  assert.equal(Core.promotionEvidence('#享界s9t合作推广 #享界', []), 'caption-disclosure');
+  assert.equal(Core.promotionEvidence('#鸿蒙智行推荐官计划 邀请好友下单得1万积分', []), 'referral-disclosure');
+  assert.equal(Core.promotionEvidence('讨论#华为合作推广假的', []), null);
+});
+test('证据只保留允许的规则和抖音作品链接，剔除查询信息或其他域名', () => {
+  const items = Core.normalizeAuthors([{ id: 'a', evidence: { basis: 'ad-api', source: 'https://www.douyin.com/video/123?private=token' } }, { id: 'b', evidence: { basis: 'ad-api', source: 'https://evil.com/video/123' } }]);
+  assert.deepEqual(items[0].evidence, { basis: 'ad-api', source: 'https://www.douyin.com/video/123' });
+  assert.equal(items[1].evidence, undefined);
+});
+
 function backgroundHarness() {
   const data = {};
   const listeners = [];
@@ -97,8 +124,37 @@ test('设置修改、白名单保存、网页暂停和统计清空', async () =>
   await harness.dispatch({ action: 'record', type: 'failures', rule: 'navigation-timeout' });
   assert.equal(harness.data.stats.failures, 1);
   await harness.dispatch({ action: 'resetStats' }, harness.popup);
-  assert.deepEqual(harness.data.stats, { ad: 0, live: 0, shopping: 0, failures: 0 });
+  assert.deepEqual(harness.data.stats, { ad: 0, live: 0, shopping: 0, blocked: 0, failures: 0 });
   assert.deepEqual(harness.data.recent, []);
+});
+
+test('一键屏蔽与白名单互斥，作者屏蔽成功独立计数且不记作者资料', async () => {
+  const h = backgroundHarness();
+  await h.dispatch({ action: 'addAuthor', author: { id: 'MS4w.author', name: '作者' } });
+  await h.dispatch({ action: 'blockAuthor', author: { id: 'MS4w.author', name: '作者' } });
+  assert.equal(h.data.settings.whitelist.length, 0);
+  assert.equal(h.data.settings.blacklist.find(item => item.id === 'MS4w.author').name, '作者');
+  await h.dispatch({ action: 'record', type: 'blocked', rule: 'author-blacklist', author: '不得记录' });
+  assert.equal(h.data.stats.blocked, 1);
+  assert.deepEqual(Object.keys(h.data.recent[0]).sort(), ['rule', 'time', 'type']);
+  await h.dispatch({ action: 'addAuthor', author: { id: 'MS4w.author', name: '作者' } });
+  assert.equal(h.data.settings.blacklist.some(item => item.id === 'MS4w.author'), false);
+});
+test('自动收录可保存依据，但服从关闭、白名单、手动移除排除项和有效证据', async () => {
+  const h = backgroundHarness();
+  const message = { action: 'collectPromoter', author: { id: 'MS4w.promoter', name: '作者' }, evidence: { basis: 'ad-api', source: 'https://www.douyin.com/video/123' } };
+  for (const patch of [{ collectBrandPromoters: false }, { skipBlocked: false }, { enabled: false }, { whitelist: [{ id: 'MS4w.promoter' }] }, { collectionExclusions: ['MS4w.promoter'] }]) {
+    h.data.settings = Core.normalizeSettings({ blacklist: [], ...patch });
+    await h.dispatch(message); assert.equal(h.data.settings.blacklist.length, 0);
+  }
+  h.data.settings = Core.normalizeSettings({ blacklist: [] });
+  await h.dispatch({ ...message, evidence: { basis: 'invented', source: message.evidence.source } }); assert.equal(h.data.settings.blacklist.length, 0);
+  await h.dispatch(message); assert.equal(h.data.settings.blacklist[0].evidence.basis, 'ad-api');
+});
+test('升级加入首批名单，之后主动清空不会重新补回', async () => {
+  const h = backgroundHarness(); h.data.settings = { enabled: true, whitelist: [] };
+  await h.installed(); assert.equal(h.data.settings.blacklist.length, 2);
+  h.data.settings.blacklist = []; await h.installed(); assert.equal(h.data.settings.blacklist.length, 0);
 });
 test('更新与面板设置能保存新的等待值，仍允许用户调回 450 ms', async () => {
   const harness = backgroundHarness();

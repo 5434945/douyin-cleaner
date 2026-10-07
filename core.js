@@ -1,9 +1,10 @@
 /* Independent implementation. Page signals are documented in REFERENCES.md. */
 (function (scope) {
   "use strict";
+  const seed = scope.DouyinCleanerBlocklist || (typeof module !== 'undefined' && module.exports ? require('./blocked-authors.js') : []);
   const DEFAULTS = Object.freeze({
     enabled: true, skipAds: true, skipLive: true, skipShopping: false,
-    showNotice: true, iconDetection: true, apiDetection: true, shieldAds: true, skipDelay: 250, settingsRevision: 1, whitelist: []
+    showNotice: true, iconDetection: true, apiDetection: true, shieldAds: true, skipDelay: 250, settingsRevision: 1, whitelist: [], skipBlocked: true, collectBrandPromoters: true, blacklist: seed, collectionExclusions: []
   });
   const SELECTORS = Object.freeze({
     cards: '[data-e2e="feed-item"]',
@@ -28,7 +29,7 @@
   function normalizeSettings(value = {}) {
     if (!value || typeof value !== 'object') value = {};
     const settings = { ...DEFAULTS };
-    for (const key of ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds']) {
+    for (const key of ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters']) {
       if (typeof value[key] === 'boolean') settings[key] = value[key];
     }
     if (Number.isFinite(value.skipDelay)) {
@@ -37,7 +38,39 @@
       settings.skipDelay = Math.max(200, Math.min(1500, Math.round(delay)));
     }
     settings.whitelist = Array.isArray(value.whitelist) ? value.whitelist.filter(item => item && typeof item.id === 'string' && /^[A-Za-z0-9_.-]{1,180}$/.test(item.id)).slice(0, 100).map(item => ({ id: item.id, name: cleanText(item.name).slice(0, 80) })) : [];
+    settings.blacklist = normalizeAuthors(Array.isArray(value.blacklist) ? value.blacklist : seed, 1000);
+    settings.collectionExclusions = Array.isArray(value.collectionExclusions) ? [...new Set(value.collectionExclusions.filter(id => typeof id === 'string' && /^[A-Za-z0-9_.-]{1,180}$/.test(id)))].slice(0, 1000) : [];
     return settings;
+  }
+  function normalizeAuthors(items, limit = 1000) {
+    const unique = new Map();
+    for (const item of items) if (item && typeof item.id === 'string' && /^[A-Za-z0-9_.-]{1,180}$/.test(item.id)) {
+      const entry = { id: item.id, name: cleanText(item.name).slice(0, 80) };
+      if (item.evidence && ['ad-api', 'ad-node', 'ad-label', 'caption-disclosure', 'referral-disclosure'].includes(item.evidence.basis)) {
+        try { const u = new URL(item.evidence.source); if (u.protocol === 'https:' && ['www.douyin.com', 'douyin.com'].includes(u.hostname) && /^\/(video|note)\/\d+$/.test(u.pathname)) entry.evidence = { basis: item.evidence.basis, source: `https://www.douyin.com${u.pathname}` }; } catch {}
+      }
+      unique.set(item.id, entry);
+    }
+    return Array.from(unique.values()).slice(0, limit);
+  }
+  function parseBlacklist(text) {
+    let items;
+    try { const value = JSON.parse(text); items = Array.isArray(value) ? value : value.authors; }
+    catch { items = text.split(/\r?\n/).map(value => value.trim()).filter(Boolean).map(value => {
+      try { const u = new URL(value); if (u.protocol === 'https:' && ['www.douyin.com', 'douyin.com'].includes(u.hostname) && /^\/user\/[A-Za-z0-9_.-]+\/?$/.test(u.pathname)) return { id: u.pathname.split('/')[2], name: '' }; } catch {}
+      return null;
+    }); }
+    if (!Array.isArray(items) || !items.length || items.length > 1000 || items.some(item => !item || typeof item.id !== 'string' || !/^[A-Za-z0-9_.-]{1,180}$/.test(item.id))) throw new Error('请输入有效 JSON 名单或抖音作者主页链接，每行一个，最多 1000 个。');
+    return normalizeAuthors(items);
+  }
+  function promotionEvidence(text, reasons = []) {
+    if (!/(?:华为|鸿蒙|HarmonyOS|HUAWEI|问界|智界|享界|尊界|尚界|乾崑)/i.test(text)) return null;
+    const explicit = reasons.find(item => item.type === 'ad' && ['ad-api', 'ad-node', 'ad-label'].includes(item.rule));
+    if (explicit) return explicit.rule;
+    // Exact disclosure hashtags only; ordinary discussion of commercial deals is ignored.
+    if (/#(?:华为|鸿蒙智行|问界(?:M\d+)?|智界(?:R\d+|S\d+)?|享界(?:S\d+T?)?|尊界(?:S\d+)?|尚界(?:[A-Z]\d+)?)合作推广(?=\s|#|$)/i.test(text)) return 'caption-disclosure';
+    if (/#鸿蒙智行推荐官计划/.test(text) && /(?:邀请|推荐)好友/.test(text) && /(?:下单|购车)/.test(text) && /(?:得|获|赚|赠).{0,8}积分/.test(text)) return 'referral-disclosure';
+    return null;
   }
   function supportedPage(url) {
     try {
@@ -123,6 +156,7 @@
       if (productLink) add('shopping', 'shopping-link', '商品购买入口');
     }
     if (author.id && options.whitelist.some(item => item.id === author.id)) return { type: 'allowed', rule: 'author-whitelist', evidence: '作者在白名单中', author, reasons };
+    if (options.skipBlocked && author.id && options.blacklist?.some(item => item.id === author.id)) { add('blocked', 'author-blacklist', '作者在黑名单中'); return { type: 'blocked', rule: 'author-blacklist', evidence: '作者在黑名单中', author, reasons }; }
     const reason = reasons.find(item => ({ ad: options.skipAds, live: options.skipLive, shopping: options.skipShopping })[item.type]);
     return { ...(reason || { type: 'normal', rule: 'no-enabled-rule', evidence: '未发现已开启的过滤标识' }), author, reasons };
   }
@@ -181,7 +215,7 @@
     }
     return null;
   }
-  const api = Object.freeze({ DEFAULTS, SELECTORS, cleanText, normalizeSettings, supportedPage, visible, usable, classify, activeCard, identity, authorInfo, navigationControl });
+  const api = Object.freeze({ DEFAULTS, SELECTORS, cleanText, normalizeSettings, normalizeAuthors, parseBlacklist, promotionEvidence, supportedPage, visible, usable, classify, activeCard, identity, authorInfo, navigationControl });
   scope.DouyinCleanerCore = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

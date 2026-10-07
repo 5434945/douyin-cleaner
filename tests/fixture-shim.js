@@ -1,7 +1,7 @@
 "use strict";
 const originalCore = DouyinCleanerCore;
 window.DouyinCleanerCore = Object.freeze({ ...originalCore, supportedPage: () => true });
-const storageData = { settings: { ...originalCore.DEFAULTS, skipDelay: 200 }, stats: { ad: 0, live: 0, shopping: 0, failures: 0 } };
+const storageData = { settings: { ...originalCore.DEFAULTS, skipDelay: 200 }, stats: { ad: 0, live: 0, shopping: 0, blocked: 0, failures: 0 } };
 const messageListeners = [];
 const changeListeners = [];
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -16,7 +16,7 @@ window.fixtureDispatch = function (message, pageSender = false) {
 window.importScripts = () => {}; // core.js already loaded; production worker uses native importScripts.
 window.chrome = {
   runtime: {
-    id: 'fixture-extension', getManifest: () => ({ version: '0.2.0' }),
+    id: 'fixture-extension', getManifest: () => ({ version: '0.3.0' }),
     onInstalled: { addListener() {} }, onMessage: { addListener(fn) { messageListeners.push(fn); } },
     sendMessage(message) { return fixtureDispatch(message, true); }
   },

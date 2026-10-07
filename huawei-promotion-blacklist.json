@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-06",
+  "scope": "公开合作披露／积分激励推广记录；不代表完整或签约 KOC 名册",
+  "authors": [
+    {
+      "id": "MS4wLjABAAAAzrsizXjQ2Y4DkAizBlloEjP4YYIARJYniZzFOk-6EobyNk2XPgl6L1pBB3GBVdtM",
+      "name": "Car呆珊珊",
+      "evidence": {
+        "basis": "caption-disclosure",
+        "source": "https://www.douyin.com/video/7605176127564352794"
+      }
+    },
+    {
+      "id": "MS4wLjABAAAA4S9rB0aTAmiPKFbD7YUZ3bJhRYuYcJ2fpnGFWoveb1I",
+      "name": "小怡",
+      "evidence": {
+        "basis": "referral-disclosure",
+        "source": "https://www.douyin.com/note/7553214755192900907"
+      }
+    }
+  ]
+}
