@@ -1,12 +1,12 @@
-# 抖音清爽刷 v0.4.0
+# 抖音清爽刷 v0.4.1
 
-[下载 v0.4.0 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.4.0/douyin-cleaner-v0.4.0.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
+[下载 v0.4.1 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.4.1/douyin-cleaner-v0.4.1.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
 
 Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 中，自动跳过有明确页面标识或接口广告标记的广告、推广和直播推荐。商品卡、购买入口可用单独开关过滤。
 
 ## 安装（约 1 分钟）
 
-1. 将 `douyin-cleaner-v0.4.0.zip` 解压到一个长期保留的文件夹。
+1. 将 `douyin-cleaner-v0.4.1.zip` 解压到一个长期保留的文件夹。
 2. Chrome 打开 `chrome://extensions`；Edge 打开 `edge://extensions`。
 3. 开启页面上的「开发者模式」。
 4. 点击「加载已解压的扩展程序」（部分 Edge 版本称「加载解压缩的扩展」）。
@@ -135,3 +135,7 @@ Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 
 最多保存 2000 条。只在本机 chrome.storage.local 保存你主动标记的视频 ID 和最多 100 字的简介，便于撤销；不上传、不分享，也不修改抖音账号。不是模型训练；不同 ID 的重发、剪辑和相似广告不会因此被屏蔽。没有稳定视频 ID 时禁用／拒绝标记，面板对应的视频已经切换时提示重新确认，避免误标。
 
 旧版设置与已有名单继续保留。清空统计不会清空广告标记。安装后在 Chrome 扩展管理页重新加载，并刷新抖音，确认 v0.4.0。
+
+## v0.4.1 标记按钮反馈修复
+
+未连接页面、旧脚本没有视频 ID 时，按钮不再静默禁用，点击会说明原因。保存时显示进度并防止重复点击；请求超过 5 秒会恢复按钮并提示“尚未确认保存”，可查看列表后重试。收到页面回复后再次读取本地记录，只有确认记录存在／移除才提示成功。旧版页面需刷新；扩展代码替换后先在 Chrome 重新加载插件，再刷新抖音。

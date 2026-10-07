@@ -7,6 +7,12 @@ let stats = {};
 let pageStatus = null;
 let activeTab = null;
 let busy = false;
+let markingAd = false;
+let connectionError = '';
+function withTimeout(promise) {
+  let timer;
+  return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('插件响应超时，尚未确认保存。请检查广告标记列表，或刷新抖音后重试。')), 5000); })]).finally(() => clearTimeout(timer));
+}
 
 function feedback(text, error = false) {
   $('feedback').textContent = text;
@@ -14,7 +20,7 @@ function feedback(text, error = false) {
   $('feedback').hidden = false;
 }
 async function background(action, fields = {}) {
-  const result = await chrome.runtime.sendMessage({ target: 'dy-cleaner-background', action, ...fields });
+  const result = await withTimeout(chrome.runtime.sendMessage({ target: 'dy-cleaner-background', action, ...fields }));
   if (!result?.ok) throw new Error(result?.error || '保存失败，请重新加载插件。');
   return result;
 }
@@ -92,7 +98,7 @@ function diagnosticData() {
 async function pageMessage(action) {
   if (!activeTab?.id) throw new Error('请在抖音推荐页面中打开插件。');
   try {
-    const result = await chrome.tabs.sendMessage(activeTab.id, { target: 'dy-cleaner-page', action, ...(['markAd', 'unmarkAd'].includes(action) ? { expectedVideoId: pageStatus?.current?.videoId } : {}) });
+    const result = await withTimeout(chrome.tabs.sendMessage(activeTab.id, { target: 'dy-cleaner-page', action, ...(['markAd', 'unmarkAd'].includes(action) ? { expectedVideoId: pageStatus?.current?.videoId } : {}) }));
     if (!result?.ok) throw new Error(result?.error || '页面未响应，请刷新抖音页面。');
     return result;
   } catch (error) {
@@ -101,14 +107,16 @@ async function pageMessage(action) {
   }
 }
 async function refreshStatus() {
-  if (busy) return;
+  if (busy || markingAd) return;
   busy = true;
   try {
-    [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    [activeTab] = await withTimeout(chrome.tabs.query({ active: true, currentWindow: true }));
     pageStatus = await pageMessage('status');
+    connectionError = '';
     $('status').textContent = pageStatus.status;
     $('evidence').textContent = pageStatus.current?.evidence || '进入推荐视频流后开始检测';
-  } catch {
+  } catch (error) {
+    connectionError = error.message;
     pageStatus = null;
     $('status').textContent = '等待抖音推荐页面';
     $('evidence').textContent = '安装后刷新抖音，点击左侧「推荐」';
@@ -116,8 +124,9 @@ async function refreshStatus() {
     const usable = Boolean(pageStatus?.supported && pageStatus.current?.identified);
     $('status-dot').classList.toggle('active', Boolean(usable && settings.enabled));
     $('allow').disabled = !usable;
-    $('mark-ad').disabled = !usable || !pageStatus?.current?.videoId;
-    $('mark-ad').textContent = pageStatus?.current?.markedAd ? '取消本条广告标记' : '标记本条为广告';
+    // Keep the action clickable when disconnected so the user receives a reason.
+    $('mark-ad').disabled = markingAd;
+    if (!markingAd) $('mark-ad').textContent = pageStatus?.current?.markedAd ? '取消本条广告标记' : '标记本条为广告';
     $('undo').disabled = !pageStatus?.canUndo;
     $('block').disabled = !usable || !pageStatus?.current?.author?.id;
     $('whitelist').disabled = !usable || !pageStatus?.current?.author?.id;
@@ -136,11 +145,29 @@ for (const action of ['allow', 'undo', 'whitelist', 'block']) $(action).addEvent
   } catch (error) { feedback(error.message, true); }
 });
 $('mark-ad').addEventListener('click', async () => {
+  if (markingAd) return;
   const removing = Boolean(pageStatus?.current?.markedAd);
+  markingAd = true;
   $('mark-ad').disabled = true;
-  try { await pageMessage(removing ? 'unmarkAd' : 'markAd'); feedback(removing ? '已取消本条广告标记，并临时放行。' : '已记住本条广告，以后再刷到会自动跳过。'); }
-  catch (error) { feedback(error.message, true); }
-  await refreshStatus();
+  $('mark-ad').textContent = removing ? '正在取消标记…' : '正在保存标记…';
+  feedback(removing ? '正在取消本条广告标记…' : '正在保存本条广告标记…');
+  try {
+    if (!pageStatus) throw new Error(connectionError || '未连接推荐流，请在 Chrome 重新加载插件后刷新抖音页面。');
+    if (!pageStatus.supported) throw new Error('请在抖音“推荐”视频流中标记广告。');
+    if (!pageStatus.current?.videoId) {
+      if (pageStatus.version && pageStatus.version !== chrome.runtime.getManifest().version) throw new Error(`页面仍运行旧脚本 v${pageStatus.version}，请刷新抖音页面后再标记。`);
+      throw new Error('未读取到稳定视频 ID，请停留在推荐视频上，刷新抖音页面后重试。');
+    }
+    const id = pageStatus.current.videoId;
+    await pageMessage(removing ? 'unmarkAd' : 'markAd');
+    const data = await withTimeout(chrome.storage.local.get('settings'));
+    settings = Core.normalizeSettings(data.settings);
+    const saved = settings.learnedAds.some(item => item.id === id);
+    if (saved === removing) throw new Error('页面已响应，但未确认标记记录保存成功。请重新加载插件并刷新抖音页面。');
+    renderSettings();
+    feedback(removing ? '已取消本条广告标记，并临时放行。' : '已保存广告标记，可在“我标记的广告”中查看；再次遇到会自动跳过。');
+  } catch (error) { feedback(error.message, true); }
+  finally { markingAd = false; await refreshStatus(); }
 });
 $('resetStats').addEventListener('click', async () => {
   try { await background('resetStats'); feedback('已清空本地统计。'); } catch (error) { feedback(error.message, true); }

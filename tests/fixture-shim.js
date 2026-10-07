@@ -16,7 +16,7 @@ window.fixtureDispatch = function (message, pageSender = false) {
 window.importScripts = () => {}; // core.js already loaded; production worker uses native importScripts.
 window.chrome = {
   runtime: {
-    id: 'fixture-extension', getManifest: () => ({ version: '0.4.0' }),
+    id: 'fixture-extension', getManifest: () => ({ version: '0.4.1' }),
     onInstalled: { addListener() {} }, onMessage: { addListener(fn) { messageListeners.push(fn); } },
     sendMessage(message) { return fixtureDispatch(message, true); }
   },

@@ -6,6 +6,13 @@
 
 建议使用 [最新 Release](https://github.com/5434945/douyin-cleaner/releases/latest)。历史版本用于审阅演进；本地测试不等同于已安装扩展的完整实站验证。
 
+## [v0.4.1](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.1) — 修复广告标记按钮缺少反馈
+
+- 标记按钮显示连接、版本和视频 ID 异常原因，保存过程中阻止重复点击。
+- 加入 5 秒超时提示及保存后读取验证，避免未保存却显示成功。
+
+**验证：** Node 24 项通过，面板 7 个反馈场景已验证；本次未重新执行全部 81 项浏览器回归。
+
 ## [v0.4.0](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.0) — 手动标记本条视频为广告
 
 - 新增手动广告标记、取消标记和名单管理；保存稳定视频 ID，下次遇到同一 ID 时跳过。
