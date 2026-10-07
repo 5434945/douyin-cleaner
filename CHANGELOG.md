@@ -6,6 +6,14 @@
 
 建议使用 [最新 Release](https://github.com/5434945/douyin-cleaner/releases/latest)。历史版本用于审阅演进；本地测试不等同于已安装扩展的完整实站验证。
 
+## [v0.4.2](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.2) — 修复辅助模块缺失导致页面脚本启动失败
+
+- 修复 DouyinCleanerFeed is not defined：模块缺失时仅停用接口辅助识别，页面识别和手动标记仍能运行。
+- 网络捕获脚本安全退出，增加模块可用性诊断和清单加载顺序检查。
+- 已复现并修复该错误；用户实际加载目录及模块缺失的具体成因未确认。
+
+**验证：** Node 28 项、Chrome 完整本地回归 81 项及缺失模块专项 4 项通过。
+
 ## [v0.4.1](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.1) — 修复广告标记按钮缺少反馈
 
 - 标记按钮显示连接、版本和视频 ID 异常原因，保存过程中阻止重复点击。

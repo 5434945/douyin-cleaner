@@ -1,7 +1,8 @@
 // Passive observer: original requests, response bodies and promises are preserved.
 (function () {
   'use strict';
-  const Feed = DouyinCleanerFeed;
+  const Feed = globalThis.DouyinCleanerFeed;
+  if (!Feed || typeof Feed.records !== 'function' || typeof Feed.feedURL !== 'function') return;
   let enabled = false;
   const cache = new Map();
   const publish = items => window.postMessage({ channel: Feed.CHANNEL, kind: 'records', items }, location.origin);

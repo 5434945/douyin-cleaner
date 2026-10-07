@@ -1,16 +1,18 @@
 (function () {
   "use strict";
   const Core = DouyinCleanerCore;
-  const Feed = DouyinCleanerFeed;
+  // The optional API observer must never prevent DOM filtering or manual marking.
+  const feedAvailable = typeof globalThis.DouyinCleanerFeed?.validate === 'function' && typeof globalThis.DouyinCleanerFeed?.CHANNEL === 'string';
+  const Feed = feedAvailable ? globalThis.DouyinCleanerFeed : { CHANNEL: 'douyin-cleaner-feed-v1', validate: () => null };
   const feedRecords = new Map();
   let shield = null;
   function configureCapture() {
-    const enabled = settings.enabled && settings.apiDetection && settings.skipAds && Core.supportedPage(location.href);
+    const enabled = feedAvailable && settings.enabled && settings.apiDetection && settings.skipAds && Core.supportedPage(location.href);
     if (!enabled) feedRecords.clear();
     window.postMessage({ channel: Feed.CHANNEL, kind: 'configure', enabled }, location.origin);
   }
   window.addEventListener('message', event => {
-    if (event.source !== window || event.origin !== location.origin || event.data?.channel !== Feed.CHANNEL || event.data.kind !== 'records' || !settings.enabled || !settings.apiDetection || !settings.skipAds || !Core.supportedPage(location.href)) return;
+    if (!feedAvailable || event.source !== window || event.origin !== location.origin || event.data?.channel !== Feed.CHANNEL || event.data.kind !== 'records' || !settings.enabled || !settings.apiDetection || !settings.skipAds || !Core.supportedPage(location.href)) return;
     const items = Feed.validate(event.data.items);
     if (!items) return;
     for (const item of items) { feedRecords.delete(item.id); feedRecords.set(item.id, { ad: item.ad, expires: Date.now() + 600000 }); }
@@ -290,7 +292,7 @@
       current: current ? { type: current.detection.type, rule: current.detection.rule, evidence: current.detection.evidence, author: current.detection.author, identified: Boolean(current.key), videoId: Core.videoId(current.root), markedAd: settings.learnedAds.some(item => item.id === Core.videoId(current.root)) } : null,
       canUndo: Boolean(lastSkipped && current?.key === lastSkipped.destination && !transaction),
       rules: current?.detection.reasons || [],
-      selectorHits: { card: Boolean(current), active: Boolean(current?.root.matches(Core.SELECTORS.active) || current?.root.querySelector(Core.SELECTORS.active)), next: Boolean(current && Core.navigationControl(current.root, 'next')) }
+      selectorHits: { feedAvailable, card: Boolean(current), active: Boolean(current?.root.matches(Core.SELECTORS.active) || current?.root.querySelector(Core.SELECTORS.active)), next: Boolean(current && Core.navigationControl(current.root, 'next')) }
     };
   }
   chrome.runtime.onMessage.addListener((message, sender, reply) => {

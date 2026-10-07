@@ -1,12 +1,12 @@
-# 抖音清爽刷 v0.4.1
+# 抖音清爽刷 v0.4.2
 
-[下载 v0.4.1 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.4.1/douyin-cleaner-v0.4.1.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
+[下载 v0.4.2 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.4.2/douyin-cleaner-v0.4.2.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
 
 Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 中，自动跳过有明确页面标识或接口广告标记的广告、推广和直播推荐。商品卡、购买入口可用单独开关过滤。
 
 ## 安装（约 1 分钟）
 
-1. 将 `douyin-cleaner-v0.4.1.zip` 解压到一个长期保留的文件夹。
+1. 将 `douyin-cleaner-v0.4.2.zip` 解压到一个长期保留的文件夹。
 2. Chrome 打开 `chrome://extensions`；Edge 打开 `edge://extensions`。
 3. 开启页面上的「开发者模式」。
 4. 点击「加载已解压的扩展程序」（部分 Edge 版本称「加载解压缩的扩展」）。
@@ -139,3 +139,9 @@ Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 
 ## v0.4.1 标记按钮反馈修复
 
 未连接页面、旧脚本没有视频 ID 时，按钮不再静默禁用，点击会说明原因。保存时显示进度并防止重复点击；请求超过 5 秒会恢复按钮并提示“尚未确认保存”，可查看列表后重试。收到页面回复后再次读取本地记录，只有确认记录存在／移除才提示成功。旧版页面需刷新；扩展代码替换后先在 Chrome 重新加载插件，再刷新抖音。
+
+## v0.4.2 修复启动依赖缺失
+
+修复 `DouyinCleanerFeed is not defined` 使页面脚本整个退出的问题。接口模块缺失时暂时禁用接口信号捕获，页面标签识别、自动切换和手动标记仍运行；不会信任未经验证的接口桥接消息。诊断的 selectorHits.feedAvailable 表示接口模块是否可用。
+
+更新须将完整新版文件（包括 manifest.json 和 feed-data.js）覆盖当前 Chrome 已加载的原文件夹，然后重新加载扩展并刷新抖音。完整包在 MAIN 和隔离环境都声明了正确的依赖顺序。
