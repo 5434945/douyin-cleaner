@@ -65,6 +65,18 @@ const observedAdGlyph = 'M9.492 2.004L8.22 2.22c.216.336.408.72.588 1.128h-4.38v
 function glyphBadge(root) {
   root.querySelector('.account').insertAdjacentHTML('beforeend', `<svg viewBox="0 0 60 32" width="30" height="16"><path d="${observedAdGlyph}"/></svg>`);
 }
+async function audioTransition(initialMuted) {
+  await reset([item('ad'), item()], { enabled: false });
+  const video = document.createElement('video'); video.muted = initialMuted; video.volume = 0.65; cardsNode.firstElementChild.append(video);
+  let inheritedMuted, nextVideo;
+  const button = document.querySelector('[data-e2e="video-switch-next-arrow"]');
+  const inherit = () => { inheritedMuted = video.muted; };
+  const attachNext = () => { if (model.index === 1) { nextVideo = document.createElement('video'); nextVideo.muted = inheritedMuted; nextVideo.volume = video.volume; cardsNode.firstElementChild.append(nextVideo); } };
+  // Model a player carrying its current audio preference into the next video.
+  button.addEventListener('click', inherit, true); button.addEventListener('click', attachNext);
+  try { await settingsPatch({ enabled: true }); await until(() => storageData.stats.ad === 1); assert(nextVideo && nextVideo.muted === initialMuted, '下一条继承了插件修改后的静音状态'); assert(nextVideo.volume === 0.65); }
+  finally { button.removeEventListener('click', inherit, true); button.removeEventListener('click', attachNext); }
+}
 async function check(name, fn) {
   const row = document.createElement('li'); row.textContent = `运行中：${name}`; results.append(row);
   try { await fn(); passed++; row.textContent = `✓ ${name}`; row.style.color = '#a6e0c8'; }
@@ -184,18 +196,20 @@ document.getElementById('run').addEventListener('click', async event => {
     const ad = numericItem(); await reset([ad, item()], { skipDelay: 1000 }); metadata([{ id: ad.id, ad: true }]);
     await delay(100); metadata([{ id: ad.id, ad: false }]); await delay(1100); assert(model.clicks === 0);
   });
-  await check('切换时遮挡静音，暂停后恢复原本音量状态', async () => {
+  await check('有声广告跳过后下一条保持有声和原音量', () => audioTransition(false));
+  await check('用户原本静音时跳过后仍保留静音', () => audioTransition(true));
+  await check('切换时仅遮挡画面，暂停后不改变声音状态', async () => {
     await reset([item('ad'), item()]); model.navigationWorks = false;
     const video = document.createElement('video'); cardsNode.firstElementChild.append(video);
-    await until(() => Boolean(document.getElementById('dy-cleaner-shield'))); assert(video.muted);
+    await until(() => Boolean(document.getElementById('dy-cleaner-shield'))); assert(!video.muted);
     await settingsPatch({ enabled: false }); assert(!video.muted && !document.getElementById('dy-cleaner-shield'));
   });
-  await check('切换失败后移除遮挡，保留原本静音状态', async () => {
+  await check('切换失败后移除遮挡，保留用户原本静音状态', async () => {
     await reset([item('ad'), item()]); model.navigationWorks = false;
     const video = document.createElement('video'); video.muted = true; cardsNode.firstElementChild.append(video);
     await until(() => storageData.stats.failures === 1); assert(video.muted && !document.getElementById('dy-cleaner-shield'));
   });
-  await check('成功切换后恢复旧播放器，不影响下一条播放器', async () => {
+  await check('成功切换后移除遮挡，不改变旧播放器声音', async () => {
     await reset([item('ad'), item()]);
     const video = document.createElement('video'); cardsNode.firstElementChild.append(video);
     await until(() => storageData.stats.ad === 1); assert(!video.muted && !document.getElementById('dy-cleaner-shield'));
@@ -324,4 +338,11 @@ document.getElementById('ad-regression').addEventListener('click', async () => {
   await check('SVG 明确广告标题', () => { const root = sample(item()); root.querySelector('.account').insertAdjacentHTML('beforeend', '<svg width="30" height="16"><title>广告</title><rect width="30" height="16"/></svg>'); assert(classify(root).type === 'ad'); });
   await check('实站广告字形尺寸变化', () => { const root = sample(item()); glyphBadge(root); assert(classify(root).type === 'ad'); });
   fixtures.replaceChildren(); document.getElementById('summary').textContent = `广告专项：通过 ${passed} · 失败 ${failedCount}`;
+});
+
+document.getElementById('audio-regression').addEventListener('click', async () => {
+  passed = 0; failedCount = 0; results.replaceChildren();
+  await check('有声广告跳过后下一条保持有声和原音量', () => audioTransition(false));
+  await check('用户原本静音时跳过后仍保留静音', () => audioTransition(true));
+  document.getElementById('summary').textContent = `声音专项：通过 ${passed} · 失败 ${failedCount}`;
 });

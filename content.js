@@ -28,7 +28,6 @@
     if (!shield) return;
     const previous = shield; shield = null;
     clearTimeout(previous.timeout); previous.host.remove();
-    for (const [video, muted] of previous.videos) if (video.muted === true) video.muted = muted;
   }
   function showShield(root) {
     clearShield();
@@ -37,10 +36,9 @@
     const host = document.createElement('div'); host.id = 'dy-cleaner-shield';
     host.style.cssText = `position:fixed;pointer-events:none;z-index:2147483646;background:#111;color:#ddd;display:flex;align-items:center;justify-content:center;font:14px system-ui;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px`;
     host.textContent = '正在跳过广告';
-    const videos = Array.from(root.querySelectorAll('video'), video => [video, video.muted]);
-    shield = { host, videos, root, key: Core.identity(root), timeout: setTimeout(clearShield, 4200) };
+    shield = { host, root, key: Core.identity(root), timeout: setTimeout(clearShield, 4200) };
     document.documentElement.appendChild(host);
-    for (const [video] of videos) video.muted = true;
+    // Audio preferences belong to the player/user; do not trigger volumechange.
   }
   const labels = { ad: '广告 / 推广', live: '直播推荐', shopping: '带货视频', blocked: '黑名单作者' };
   let settings = Core.normalizeSettings();

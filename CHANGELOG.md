@@ -6,6 +6,13 @@
 
 建议使用 [最新 Release](https://github.com/5434945/douyin-cleaner/releases/latest)。历史版本用于审阅演进；本地测试不等同于已安装扩展的完整实站验证。
 
+## [v0.4.3](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.3) — 修复跳过广告后下一条视频静音
+
+- 删除广告遮挡期间对 muted 和音量的写入，仅保留视觉遮挡，避免播放器继承静音状态。
+- 保留用户原本的声音设置；若旧版已使站点处于静音，更新并刷新后手动恢复一次声音。
+
+**验证：** Node 28 项、Chrome 本地回归 83 项通过；覆盖静音继承与音量保持。未进行已安装扩展的实站听音验证。
+
 ## [v0.4.2](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.2) — 修复辅助模块缺失导致页面脚本启动失败
 
 - 修复 DouyinCleanerFeed is not defined：模块缺失时仅停用接口辅助识别，页面识别和手动标记仍能运行。

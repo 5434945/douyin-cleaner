@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header><div class="brand-icon" aria-hidden="true">↧</div><div><h1>抖音清爽刷</h1><p>留下想看的，跳过打扰。</p></div><span class="version">v0.4.2</span></header>
+  <header><div class="brand-icon" aria-hidden="true">↧</div><div><h1>抖音清爽刷</h1><p>留下想看的，跳过打扰。</p></div><span class="version">v0.4.3</span></header>
   <main>
     <section class="master"><div><strong>自动过滤</strong><small>快捷键 Alt + Shift + S</small></div><label class="switch"><input id="enabled" type="checkbox" aria-label="自动过滤"><span></span></label></section>
     <section class="status" aria-live="polite"><span id="status-dot" class="dot"></span><div><strong id="status">正在连接…</strong><p id="evidence">打开抖音的「推荐」页面开始使用</p></div></section>
@@ -24,7 +24,7 @@
       <label class="setting"><span><strong>跳过提示</strong><small>提示中可直接返回并放行</small></span><span class="switch"><input id="showNotice" type="checkbox"><span></span></span></label>
       <label class="setting"><span><strong>广告图标兼容识别</strong><small>匹配作者信息区的已知图标；误判时关闭</small></span><span class="switch"><input id="iconDetection" type="checkbox"><span></span></span></label>
       <label class="setting"><span><strong>接口广告标识识别</strong><small>补充检测推荐接口的明确广告标记</small></span><span class="switch"><input id="apiDetection" type="checkbox"><span></span></span></label>
-      <label class="setting"><span><strong>跳过时遮挡广告并静音</strong><small>切换完成或取消时恢复原状态</small></span><span class="switch"><input id="shieldAds" type="checkbox"><span></span></span></label>
+      <label class="setting"><span><strong>跳过时遮挡广告</strong><small>切换时遮挡画面，保留你的声音设置</small></span><span class="switch"><input id="shieldAds" type="checkbox"><span></span></span></label>
       <label class="delay-label" for="skipDelay">画面稳定等待 <output id="delay-value">250 ms</output></label><input id="skipDelay" type="range" min="200" max="1500" step="50">
       <p class="hint">标识较晚出现时会重新检测。数值越大，手动切换时越从容。</p>
       <h2>作者白名单</h2><ul id="authors" class="authors"></ul><p id="empty-authors" class="hint">暂无。加入后，该作者的广告和直播也会保留。</p>

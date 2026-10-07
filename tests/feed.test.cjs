@@ -90,3 +90,4 @@ test('Manifest 在两个世界都先加载接口模块，再加载使用者', ()
     assert.ok(entry.js.indexOf('feed-data.js') < entry.js.indexOf(consumer));
   }
 });
+
