@@ -4,3 +4,7 @@ node_modules/
 .env.*
 .DS_Store
 Thumbs.db
+__pycache__/
+/tests/userscript-fixture.js
+/tests/userscript-fixture.html
+/tests/userscript-mock.js

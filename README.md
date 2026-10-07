@@ -1,5 +1,7 @@
 # 抖音清爽刷 v0.4.5
 
+**油猴版已发布：[Greasy Fork 安装 v0.5.0](https://greasyfork.org/zh-CN/scripts/599120)**。保留过滤、手动标记及快速拉黑，增加页面内设置面板；[油猴版说明](userscript/README.md)。使用油猴版时暂停原扩展，避免重复切换；两者本地数据独立。
+
 [下载 v0.4.5 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.4.5/douyin-cleaner-v0.4.5.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
 
 Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 中，自动跳过有明确页面标识或接口广告标记的广告、推广和直播推荐。商品卡、购买入口可用单独开关过滤。
