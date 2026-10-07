@@ -23,8 +23,17 @@ test('设置类型校验与延迟范围约束', () => {
   assert.equal(Core.normalizeSettings({ enabled: false }).enabled, false);
   assert.equal(Core.normalizeSettings({ skipDelay: -100 }).skipDelay, 200);
   assert.equal(Core.normalizeSettings({ skipDelay: 90000 }).skipDelay, 1500);
-  assert.equal(Core.normalizeSettings({ skipDelay: Infinity }).skipDelay, 450);
+  assert.equal(Core.normalizeSettings({ skipDelay: Infinity }).skipDelay, 250);
   assert.equal(Core.normalizeSettings({ skipDelay: 312.5 }).skipDelay, 313);
+});
+test('旧版默认等待迁移为 250 ms，自定义值和后续手选 450 ms 保留', () => {
+  assert.equal(Core.normalizeSettings({ skipDelay: 450 }).skipDelay, 250);
+  assert.equal(Core.normalizeSettings({ skipDelay: 1000 }).skipDelay, 1000);
+  assert.equal(Core.normalizeSettings({ settingsRevision: 1, skipDelay: 450 }).skipDelay, 450);
+  const migrated = Core.normalizeSettings({ skipDelay: 450, enabled: false, whitelist: [{ id: 'MS4w.author', name: '作者' }] });
+  assert.equal(migrated.enabled, false);
+  assert.equal(migrated.whitelist[0].id, 'MS4w.author');
+  assert.equal(Core.normalizeSettings(migrated).skipDelay, 250);
 });
 test('白名单 ID 校验，名称作为纯文本，数量受限', () => {
   const input = [{ id: '../bad', name: 'bad' }, { id: 'MS4w.good', name: '  作者  名称  ' }, { id: 10 }];
@@ -90,6 +99,18 @@ test('设置修改、白名单保存、网页暂停和统计清空', async () =>
   await harness.dispatch({ action: 'resetStats' }, harness.popup);
   assert.deepEqual(harness.data.stats, { ad: 0, live: 0, shopping: 0, failures: 0 });
   assert.deepEqual(harness.data.recent, []);
+});
+test('更新与面板设置能保存新的等待值，仍允许用户调回 450 ms', async () => {
+  const harness = backgroundHarness();
+  harness.data.settings = { skipDelay: 450, enabled: true };
+  await harness.installed();
+  assert.equal(harness.data.settings.skipDelay, 250);
+  assert.equal(harness.data.settings.settingsRevision, 1);
+  await harness.dispatch({ action: 'patchSettings', patch: { skipDelay: 450 } }, harness.popup);
+  assert.equal(harness.data.settings.skipDelay, 450);
+  harness.data.settings = { skipDelay: 450, enabled: true };
+  await harness.dispatch({ action: 'patchSettings', patch: { skipDelay: 450 } }, harness.popup);
+  assert.equal(harness.data.settings.skipDelay, 450);
 });
 test('Manifest 限定抖音域名，所有脚本和 UI 资源存在', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../manifest.json'), 'utf8'));

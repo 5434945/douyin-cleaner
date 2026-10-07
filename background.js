@@ -39,7 +39,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   } else if (message.action === 'patchSettings' && !sender.tab) {
     job = async () => {
       const { settings } = await chrome.storage.local.get('settings');
-      await chrome.storage.local.set({ settings: Core.normalizeSettings({ ...settings, ...message.patch }) });
+      await chrome.storage.local.set({ settings: Core.normalizeSettings({ ...Core.normalizeSettings(settings), ...message.patch }) });
     };
   } else if (message.action === 'setEnabledFromPage' && sender.tab && typeof message.enabled === 'boolean') {
     job = async () => {

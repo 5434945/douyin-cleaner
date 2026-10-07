@@ -6,6 +6,13 @@
 
 建议使用 [最新 Release](https://github.com/5434945/douyin-cleaner/releases/latest)。历史版本用于审阅演进；本地测试不等同于已安装扩展的完整实站验证。
 
+## [v0.1.1](https://github.com/5434945/douyin-cleaner/releases/tag/v0.1.1) — 加快跳过速度，保留手动操作保护
+
+- 默认稳定等待从 450 ms 降至 250 ms，保留用户自定义值。
+- 缩短手动翻页保护、DOM 检测和切换确认等待，减少连续广告的重复等待。
+
+**验证：** Node 10 项、Chrome 本地回归 40 项通过；模拟流中进行了 3 次速度对比，结果不能作为实站速度保证。
+
 ## [v0.1.0](https://github.com/5434945/douyin-cleaner/releases/tag/v0.1.0) — 首版：广告、直播推荐与可选带货过滤
 
 - 在推荐流中识别广告、推广、直播推荐；带货过滤使用独立开关。

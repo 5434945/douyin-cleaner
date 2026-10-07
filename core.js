@@ -3,7 +3,7 @@
   "use strict";
   const DEFAULTS = Object.freeze({
     enabled: true, skipAds: true, skipLive: true, skipShopping: false,
-    showNotice: true, iconDetection: true, skipDelay: 450, whitelist: []
+    showNotice: true, iconDetection: true, skipDelay: 250, settingsRevision: 1, whitelist: []
   });
   const SELECTORS = Object.freeze({
     cards: '[data-e2e="feed-item"]',
@@ -31,7 +31,11 @@
     for (const key of ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection']) {
       if (typeof value[key] === 'boolean') settings[key] = value[key];
     }
-    if (Number.isFinite(value.skipDelay)) settings.skipDelay = Math.max(200, Math.min(1500, Math.round(value.skipDelay)));
+    if (Number.isFinite(value.skipDelay)) {
+      // Migrate the original 450 ms default once; later explicit choices remain intact.
+      const delay = value.settingsRevision == null && value.skipDelay === 450 ? DEFAULTS.skipDelay : value.skipDelay;
+      settings.skipDelay = Math.max(200, Math.min(1500, Math.round(delay)));
+    }
     settings.whitelist = Array.isArray(value.whitelist) ? value.whitelist.filter(item => item && typeof item.id === 'string' && /^[A-Za-z0-9_.-]{1,180}$/.test(item.id)).slice(0, 100).map(item => ({ id: item.id, name: cleanText(item.name).slice(0, 80) })) : [];
     return settings;
   }

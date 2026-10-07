@@ -12,6 +12,7 @@
   let manualUntil = 0;
   let status = '正在初始化';
   let timer = null;
+  let timerDue = Infinity;
   let watchedFeed = null;
   let noticeTimer = null;
   let uiHost = null;
@@ -19,7 +20,7 @@
   let failUntil = 0;
   const allowed = new Map();
   const failed = new Set();
-  const observer = new MutationObserver(() => schedule(100));
+  const observer = new MutationObserver(() => schedule(60));
 
   function sendBackground(action, fields = {}) {
     return chrome.runtime.sendMessage({ target: 'dy-cleaner-background', action, ...fields }).then(result => {
@@ -27,9 +28,13 @@
       return result;
     });
   }
-  function schedule(delay = 100) {
-    if (timer || stopped) return;
-    timer = setTimeout(() => { timer = null; tick(); }, delay);
+  function schedule(delay = 60) {
+    if (stopped) return;
+    const due = Date.now() + delay;
+    if (timer && timerDue <= due) return;
+    clearTimeout(timer);
+    timerDue = due;
+    timer = setTimeout(() => { timer = null; timerDue = Infinity; tick(); }, delay);
   }
   function allowKey(key) {
     if (!key) return;
@@ -123,7 +128,8 @@
       sendBackground('record', { type: tx.reason.type, rule: tx.reason.rule }).catch(storageFailure);
       notice(`已跳过：${labels[tx.reason.type]}`, true);
     } else notice('已返回，本条已放行 10 分钟。', false, true);
-    current.since = Date.now();
+    // The destination already has a stability timestamp. Keep the elapsed settling
+    // time so consecutive ads do not incur a second full delay after confirmation.
   }
   function storageFailure() {
     settings.enabled = false;
@@ -147,12 +153,12 @@
     updateCurrent(root, now);
     if (!settings.enabled && transaction?.kind !== 'undo') { status = '已暂停自动过滤'; cancelTransaction(); return; }
     if (isEditingOrModal()) { status = '正在输入或有弹窗，暂停过滤'; cancelTransaction(); return; }
-    if (now < manualUntil) { status = '手动操作中'; return; }
+    if (now < manualUntil) { status = '手动操作中'; schedule(manualUntil - now); return; }
     if (!current?.key) { status = root ? '未读取到内容标识，保留本条' : '等待推荐流播放器'; return; }
     if (transaction) {
       const tx = transaction;
       if (current.key !== tx.from) {
-        if (now - current.since < 180) { status = '正在确认切换'; schedule(100); return; }
+        if (now - current.since < 120) { status = '正在确认切换'; schedule(40); return; }
         if (tx.kind === 'undo' && current.key !== tx.destination) {
           cancelTransaction(); notice('未能返回指定内容，请手动回看后点击“本条放行”。', false, true); return;
         }
@@ -170,20 +176,24 @@
           notice('自动切换未成功，已停止重试。可手动切换下一条。', false, true);
         }
       }
-      schedule(100);
+      schedule(40);
       return;
     }
     if (lastSkipped && current.key !== lastSkipped.destination && ui) ui.undo.hidden = true;
     if (isAllowed(current.key)) { status = '本条已放行'; return; }
     if (failed.has(current.key)) { status = '切换失败，已保留本条'; return; }
     if (current.detection.type === 'allowed') { status = '白名单作者，保留本条'; return; }
-    if (now - current.since < settings.skipDelay || now < failUntil) { status = '等待画面稳定'; schedule(100); return; }
+    if (now - current.since < settings.skipDelay || now < failUntil) {
+      status = '等待画面稳定';
+      schedule(Math.max(20, Math.min(80, Math.max(current.since + settings.skipDelay, failUntil) - now)));
+      return;
+    }
     if (!labels[current.detection.type]) { status = '检测中 · 保留当前内容'; return; }
     status = `正在跳过${labels[current.detection.type]}`;
     const tx = { kind: 'skip', from: current.key, reason: current.detection, direction: 'next', attempts: 0, attemptedAt: now };
     transaction = tx;
     if (!navigate(tx)) cancelTransaction();
-    schedule(100);
+    schedule(40);
   }
   function undo() {
     const root = Core.activeCard();
@@ -197,7 +207,7 @@
     transaction = tx;
     manualUntil = 0;
     if (!navigate(tx)) { cancelTransaction(); return { ok: false, error: '暂时无法返回，请手动回看。' }; }
-    schedule(100);
+    schedule(40);
     return { ok: true };
   }
   function manualInput(event) {
@@ -206,9 +216,13 @@
     const back = (event.type === 'keydown' && ['ArrowUp', 'PageUp'].includes(event.key)) || (event.type === 'wheel' && event.deltaY < 0);
     if (back && lastSkipped && current?.key === lastSkipped.destination) allowKey(lastSkipped.key);
     cancelTransaction();
-    manualUntil = Date.now() + 800;
+    const navigationKey = event.type === 'keydown' && ['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp'].includes(event.key);
+    const navigationClick = event.type === 'pointerdown' && event.target instanceof Element && event.target.closest(`${Core.SELECTORS.next}, ${Core.SELECTORS.previous}`);
+    // Scroll/next-video inputs settle sooner; typing, touch and other clicks retain
+    // the original guard. Repeated wheel/key events extend the guard each time.
+    manualUntil = Date.now() + (navigationKey || navigationClick || event.type === 'wheel' ? 350 : 800);
     if (current) current.since = Date.now();
-    schedule(100);
+    schedule(60);
   }
   function getStatus() {
     tick();
@@ -250,7 +264,7 @@
   document.addEventListener('visibilitychange', () => { cancelTransaction(); if (current) current.since = Date.now(); schedule(100); });
   window.addEventListener('popstate', () => schedule(100));
   window.addEventListener('hashchange', () => schedule(100));
-  const heartbeat = setInterval(() => schedule(0), 700);
+  const heartbeat = setInterval(() => schedule(0), 400);
   window.addEventListener('pagehide', event => {
     observer.disconnect(); watchedFeed = null; cancelTransaction();
     if (!event.persisted) { stopped = true; clearInterval(heartbeat); clearTimeout(timer); clearTimeout(noticeTimer); }
