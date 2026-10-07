@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>抖音清爽刷</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header><div class="brand-icon" aria-hidden="true">↧</div><div><h1>抖音清爽刷</h1><p>留下想看的，跳过打扰。</p></div><span class="version">v0.1</span></header>
+  <main>
+    <section class="master"><div><strong>自动过滤</strong><small>快捷键 Alt + Shift + S</small></div><label class="switch"><input id="enabled" type="checkbox" aria-label="自动过滤"><span></span></label></section>
+    <section class="status" aria-live="polite"><span id="status-dot" class="dot"></span><div><strong id="status">正在连接…</strong><p id="evidence">打开抖音的「推荐」页面开始使用</p></div></section>
+    <section class="settings" aria-label="过滤类型">
+      <label class="setting"><span><strong>广告与推广</strong><small>明确标识、广告专用节点</small></span><span class="switch"><input id="skipAds" type="checkbox"><span></span></span></label>
+      <label class="setting"><span><strong>直播推荐</strong><small>推荐流中的直播卡片</small></span><span class="switch"><input id="skipLive" type="checkbox"><span></span></span></label>
+      <label class="setting"><span><strong>带货视频 <em>可选</em></strong><small>带商品卡或购买入口的内容</small></span><span class="switch"><input id="skipShopping" type="checkbox"><span></span></span></label>
+    </section>
+    <section class="stats" aria-label="累计成功跳过"><div><b id="ad-count">0</b><span>广告推广</span></div><div><b id="live-count">0</b><span>直播推荐</span></div><div><b id="shopping-count">0</b><span>带货视频</span></div></section>
+    <section class="actions"><button id="allow" type="button">本条放行</button><button id="undo" type="button" disabled>返回并放行</button><button id="whitelist" type="button" class="wide">将当前作者加入白名单</button></section>
+    <p id="feedback" class="feedback" role="status" hidden></p>
+    <details><summary>更多设置</summary><div class="details-body">
+      <label class="setting"><span><strong>跳过提示</strong><small>提示中可直接返回并放行</small></span><span class="switch"><input id="showNotice" type="checkbox"><span></span></span></label>
+      <label class="setting"><span><strong>广告图标兼容识别</strong><small>匹配作者信息区的已知图标；误判时关闭</small></span><span class="switch"><input id="iconDetection" type="checkbox"><span></span></span></label>
+      <label class="delay-label" for="skipDelay">画面稳定等待 <output id="delay-value">450 ms</output></label><input id="skipDelay" type="range" min="200" max="1500" step="50">
+      <p class="hint">标识较晚出现时会重新检测。数值越大，手动切换时越从容。</p>
+      <h2>作者白名单</h2><ul id="authors" class="authors"></ul><p id="empty-authors" class="hint">暂无。加入后，该作者的广告和直播也会保留。</p>
+      <button id="resetStats" class="text-button" type="button">清空本地统计</button>
+    </div></details>
+    <details><summary>诊断信息</summary><div class="details-body"><p class="hint">识别不了时可查看命中的规则。导出的诊断不包含视频地址、文案和作者信息。</p><pre id="diagnostics">等待连接</pre><button id="export" type="button">导出诊断</button></div></details>
+  </main>
+  <footer>本机处理 · 无需账号 · 仅抖音推荐流<br>无标识的软广暂不识别</footer>
+  <script src="core.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,260 @@
+(function () {
+  "use strict";
+  const Core = DouyinCleanerCore;
+  const labels = { ad: '广告 / 推广', live: '直播推荐', shopping: '带货视频' };
+  let settings = Core.normalizeSettings();
+  let ready = false;
+  let stopped = false;
+  let route = location.href;
+  let current = null;
+  let transaction = null;
+  let lastSkipped = null;
+  let manualUntil = 0;
+  let status = '正在初始化';
+  let timer = null;
+  let watchedFeed = null;
+  let noticeTimer = null;
+  let uiHost = null;
+  let ui = null;
+  let failUntil = 0;
+  const allowed = new Map();
+  const failed = new Set();
+  const observer = new MutationObserver(() => schedule(100));
+
+  function sendBackground(action, fields = {}) {
+    return chrome.runtime.sendMessage({ target: 'dy-cleaner-background', action, ...fields }).then(result => {
+      if (!result?.ok) throw new Error('Storage update failed');
+      return result;
+    });
+  }
+  function schedule(delay = 100) {
+    if (timer || stopped) return;
+    timer = setTimeout(() => { timer = null; tick(); }, delay);
+  }
+  function allowKey(key) {
+    if (!key) return;
+    allowed.delete(key);
+    allowed.set(key, Date.now() + 10 * 60 * 1000);
+    while (allowed.size > 200) allowed.delete(allowed.keys().next().value);
+  }
+  function isAllowed(key) {
+    const expiry = allowed.get(key);
+    if (!expiry) return false;
+    if (expiry <= Date.now()) { allowed.delete(key); return false; }
+    return true;
+  }
+  function isEditingOrModal() {
+    const focused = document.activeElement;
+    if (focused?.matches('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')) return true;
+    return Array.from(document.querySelectorAll('[role="dialog"], [aria-modal="true"], .semi-modal-content, [data-e2e="comment-list"]')).some(Core.visible);
+  }
+  function refreshObserver(root) {
+    const feed = root?.closest(Core.SELECTORS.feed) || root?.parentElement || document.querySelector(Core.SELECTORS.feed);
+    if (feed === watchedFeed && feed?.isConnected) return;
+    observer.disconnect();
+    watchedFeed = feed;
+    if (feed) observer.observe(feed, { subtree: true, childList: true, characterData: true, attributes: true,
+      attributeFilter: ['data-e2e', 'data-e2e-vid', 'data-e2e-aweme-id', 'data-room-id', 'data-active', 'src', 'href', 'aria-label', 'aria-hidden', 'class'] });
+  }
+  function ensureUI() {
+    if (uiHost?.isConnected) return;
+    uiHost = document.createElement('div');
+    uiHost.id = 'dy-cleaner-ui';
+    const shadow = uiHost.attachShadow({ mode: 'closed' });
+    shadow.innerHTML = `<style>
+      :host { all:initial; color-scheme:dark; } * { box-sizing:border-box; }
+      .notice { font:13px/1.6 system-ui,"Microsoft YaHei",sans-serif; color:#f2f5f7; background:#151b24f5; border:1px solid #34434d; border-radius:12px; padding:12px 14px; box-shadow:0 8px 28px #0005; max-width:360px; }
+      .notice[hidden] { display:none; } .eyebrow { color:#6bdccc; font-size:11px; margin-bottom:3px; } .actions { display:flex; gap:8px; margin-top:9px; }
+      button { border:1px solid #43535c; background:#25343d; color:#eaf9f7; border-radius:6px; padding:5px 10px; cursor:pointer; font:12px system-ui,"Microsoft YaHei",sans-serif; } button:hover { background:#345058; }
+    </style><section class="notice" role="status" aria-live="polite" hidden><div class="eyebrow">抖音清爽刷</div><div class="message"></div><div class="actions"><button class="undo" type="button">返回并放行</button><button class="pause" type="button">暂停过滤</button><button class="dismiss" type="button" aria-label="关闭提示">关闭</button></div></section>`;
+    ui = { box: shadow.querySelector('.notice'), message: shadow.querySelector('.message'), undo: shadow.querySelector('.undo') };
+    ui.undo.addEventListener('click', () => undo());
+    shadow.querySelector('.pause').addEventListener('click', async () => {
+      settings.enabled = false;
+      cancelTransaction();
+      await sendBackground('setEnabledFromPage', { enabled: false }).catch(storageFailure);
+      ui.box.hidden = true;
+    });
+    shadow.querySelector('.dismiss').addEventListener('click', () => { ui.box.hidden = true; });
+    document.documentElement.appendChild(uiHost);
+  }
+  function notice(text, canUndo = false, force = false) {
+    if (!settings.showNotice && !force) return;
+    ensureUI();
+    ui.message.textContent = text;
+    ui.undo.hidden = !canUndo;
+    ui.box.hidden = false;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => { if (ui) ui.box.hidden = true; }, canUndo ? 6000 : 4500);
+  }
+  function cancelTransaction() { transaction = null; }
+  function updateCurrent(root, now) {
+    if (!root) { current = null; return; }
+    const key = Core.identity(root);
+    const top = root.getBoundingClientRect().top;
+    if (!current || current.key !== key || current.root !== root) {
+      current = { root, key, since: now, top, detection: Core.classify(root, settings) };
+    } else {
+      if (Math.abs(top - current.top) > 6) current.since = now;
+      current.top = top;
+      current.detection = Core.classify(root, settings);
+    }
+  }
+  function navigate(tx, fallback = false) {
+    // Re-read the active card immediately before any action.
+    const root = Core.activeCard();
+    if (!root || Core.identity(root) !== tx.from || !Core.supportedPage(location.href) || isEditingOrModal() || document.hidden) return false;
+    const control = !fallback && Core.navigationControl(root, tx.direction);
+    tx.method = control ? 'button' : 'keyboard';
+    tx.attemptedAt = Date.now();
+    tx.attempts += 1;
+    if (control) control.click();
+    else {
+      const key = tx.direction === 'next' ? 'ArrowDown' : 'ArrowUp';
+      const code = tx.direction === 'next' ? 40 : 38;
+      for (const type of ['keydown', 'keyup']) document.body.dispatchEvent(new KeyboardEvent(type, { key, code: key, keyCode: code, which: code, bubbles: true, cancelable: true }));
+    }
+    return true;
+  }
+  function completeTransaction(tx) {
+    transaction = null;
+    if (tx.kind === 'skip') {
+      lastSkipped = { key: tx.from, destination: current.key, reason: tx.reason };
+      sendBackground('record', { type: tx.reason.type, rule: tx.reason.rule }).catch(storageFailure);
+      notice(`已跳过：${labels[tx.reason.type]}`, true);
+    } else notice('已返回，本条已放行 10 分钟。', false, true);
+    current.since = Date.now();
+  }
+  function storageFailure() {
+    settings.enabled = false;
+    cancelTransaction();
+    status = '插件连接中断，请刷新抖音页面';
+    notice(status, false, true);
+  }
+  function tick() {
+    if (!ready || stopped) return;
+    const now = Date.now();
+    if (location.href !== route) {
+      route = location.href; current = null; lastSkipped = null; cancelTransaction();
+      if (ui) ui.box.hidden = true;
+    }
+    if (!Core.supportedPage(location.href)) {
+      status = '仅在推荐视频流中生效'; current = null; cancelTransaction(); refreshObserver(null); return;
+    }
+    if (document.hidden) { status = '标签页在后台，已暂停'; cancelTransaction(); return; }
+    const root = Core.activeCard();
+    refreshObserver(root);
+    updateCurrent(root, now);
+    if (!settings.enabled && transaction?.kind !== 'undo') { status = '已暂停自动过滤'; cancelTransaction(); return; }
+    if (isEditingOrModal()) { status = '正在输入或有弹窗，暂停过滤'; cancelTransaction(); return; }
+    if (now < manualUntil) { status = '手动操作中'; return; }
+    if (!current?.key) { status = root ? '未读取到内容标识，保留本条' : '等待推荐流播放器'; return; }
+    if (transaction) {
+      const tx = transaction;
+      if (current.key !== tx.from) {
+        if (now - current.since < 180) { status = '正在确认切换'; schedule(100); return; }
+        if (tx.kind === 'undo' && current.key !== tx.destination) {
+          cancelTransaction(); notice('未能返回指定内容，请手动回看后点击“本条放行”。', false, true); return;
+        }
+        completeTransaction(tx);
+      } else if (now - tx.attemptedAt > 1700) {
+        if (tx.attempts < 2 && tx.method === 'button') {
+          if (!navigate(tx, true)) cancelTransaction();
+        } else {
+          cancelTransaction();
+          failed.add(current.key);
+          if (failed.size > 200) failed.delete(failed.values().next().value);
+          failUntil = now + 2500;
+          status = '切换失败，已保留本条';
+          sendBackground('record', { type: 'failures', rule: 'navigation-timeout' }).catch(storageFailure);
+          notice('自动切换未成功，已停止重试。可手动切换下一条。', false, true);
+        }
+      }
+      schedule(100);
+      return;
+    }
+    if (lastSkipped && current.key !== lastSkipped.destination && ui) ui.undo.hidden = true;
+    if (isAllowed(current.key)) { status = '本条已放行'; return; }
+    if (failed.has(current.key)) { status = '切换失败，已保留本条'; return; }
+    if (current.detection.type === 'allowed') { status = '白名单作者，保留本条'; return; }
+    if (now - current.since < settings.skipDelay || now < failUntil) { status = '等待画面稳定'; schedule(100); return; }
+    if (!labels[current.detection.type]) { status = '检测中 · 保留当前内容'; return; }
+    status = `正在跳过${labels[current.detection.type]}`;
+    const tx = { kind: 'skip', from: current.key, reason: current.detection, direction: 'next', attempts: 0, attemptedAt: now };
+    transaction = tx;
+    if (!navigate(tx)) cancelTransaction();
+    schedule(100);
+  }
+  function undo() {
+    const root = Core.activeCard();
+    if (transaction || !lastSkipped || !root || Core.identity(root) !== lastSkipped.destination) {
+      const result = { ok: false, error: '当前已不是紧接着的下一条，请手动回看后点击“本条放行”。' };
+      notice(result.error, false, true); return result;
+    }
+    if (document.hidden || isEditingOrModal()) return { ok: false, error: '请先关闭页面弹窗或输入框，再返回。' };
+    allowKey(lastSkipped.key);
+    const tx = { kind: 'undo', from: lastSkipped.destination, destination: lastSkipped.key, direction: 'previous', attempts: 0, attemptedAt: Date.now() };
+    transaction = tx;
+    manualUntil = 0;
+    if (!navigate(tx)) { cancelTransaction(); return { ok: false, error: '暂时无法返回，请手动回看。' }; }
+    schedule(100);
+    return { ok: true };
+  }
+  function manualInput(event) {
+    if (!event.isTrusted || event.composedPath().includes(uiHost)) return;
+    if (event.type === 'keydown' && !['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Escape', ' '].includes(event.key)) return;
+    const back = (event.type === 'keydown' && ['ArrowUp', 'PageUp'].includes(event.key)) || (event.type === 'wheel' && event.deltaY < 0);
+    if (back && lastSkipped && current?.key === lastSkipped.destination) allowKey(lastSkipped.key);
+    cancelTransaction();
+    manualUntil = Date.now() + 800;
+    if (current) current.since = Date.now();
+    schedule(100);
+  }
+  function getStatus() {
+    tick();
+    return {
+      ok: true, status, supported: Core.supportedPage(location.href), version: chrome.runtime.getManifest().version,
+      current: current ? { type: current.detection.type, rule: current.detection.rule, evidence: current.detection.evidence, author: current.detection.author, identified: Boolean(current.key) } : null,
+      canUndo: Boolean(lastSkipped && current?.key === lastSkipped.destination && !transaction),
+      rules: current?.detection.reasons || [],
+      selectorHits: { card: Boolean(current), active: Boolean(current?.root.matches(Core.SELECTORS.active) || current?.root.querySelector(Core.SELECTORS.active)), next: Boolean(current && Core.navigationControl(current.root, 'next')) }
+    };
+  }
+  chrome.runtime.onMessage.addListener((message, sender, reply) => {
+    if (sender.id !== chrome.runtime.id || message?.target !== 'dy-cleaner-page') return;
+    if (message.action === 'status') reply(getStatus());
+    else if (message.action === 'undo') reply(undo());
+    else if (message.action === 'allow') {
+      const root = Core.activeCard();
+      const key = root && Core.identity(root);
+      if (!key) { reply({ ok: false, error: '未读取到当前内容，请进入推荐流。' }); return; }
+      allowKey(key); cancelTransaction(); notice('本条已放行 10 分钟。', false, true); schedule(100); reply({ ok: true });
+    } else if (message.action === 'whitelist') {
+      const root = Core.activeCard();
+      const author = root && Core.authorInfo(root);
+      if (!author?.id) { reply({ ok: false, error: '没有读取到作者 ID，可先使用“本条放行”。' }); return; }
+      allowKey(Core.identity(root)); cancelTransaction();
+      sendBackground('addAuthor', { author }).then(result => reply(result), () => reply({ ok: false, error: '保存白名单失败，请刷新页面。' }));
+      return true;
+    }
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes.settings) return;
+    settings = Core.normalizeSettings(changes.settings.newValue);
+    cancelTransaction();
+    if (current) current.since = Date.now();
+    if (!settings.enabled && ui) ui.box.hidden = true;
+    schedule(100);
+  });
+  for (const type of ['keydown', 'wheel', 'touchstart', 'pointerdown']) document.addEventListener(type, manualInput, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', () => { cancelTransaction(); if (current) current.since = Date.now(); schedule(100); });
+  window.addEventListener('popstate', () => schedule(100));
+  window.addEventListener('hashchange', () => schedule(100));
+  const heartbeat = setInterval(() => schedule(0), 700);
+  window.addEventListener('pagehide', event => {
+    observer.disconnect(); watchedFeed = null; cancelTransaction();
+    if (!event.persisted) { stopped = true; clearInterval(heartbeat); clearTimeout(timer); clearTimeout(noticeTimer); }
+  });
+  window.addEventListener('pageshow', () => { current = null; schedule(100); });
+  chrome.storage.local.get('settings').then(data => { settings = Core.normalizeSettings(data.settings); ready = true; schedule(0); }).catch(storageFailure);
+})();
