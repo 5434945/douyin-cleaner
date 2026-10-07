@@ -315,14 +315,19 @@
         schedule(100); reply(result);
       }, () => reply({ ok: false, error: '保存广告标记失败，请刷新页面或检查标记名单是否已满。' }));
       return true;
-    } else if (['whitelist', 'block'].includes(message.action)) {
+    } else if (['whitelist', 'block', 'quickBlock'].includes(message.action)) {
       const root = Core.activeCard();
+      if (!Core.supportedPage(location.href)) { reply({ ok: false, error: '仅在推荐视频流中屏蔽作者。' }); return; }
+      if (message.action === 'quickBlock' && (document.hidden || isEditingOrModal())) { reply({ ok: false, error: '正在输入或有弹窗，快捷屏蔽未执行。' }); return; }
       const author = root && Core.authorInfo(root);
-      if (!author?.id) { reply({ ok: false, error: '没有读取到作者 ID，可先使用“本条放行”。' }); return; }
+      if (!author?.id) { if (message.action === 'quickBlock') notice('未读取到作者 ID，未屏蔽。', false, true); reply({ ok: false, error: '没有读取到作者 ID，可先使用“本条放行”。' }); return; }
       if (message.action === 'whitelist') allowKey(Core.identity(root));
-      else allowed.delete(Core.identity(root));
+      else { allowed.delete(Core.identity(root)); if (message.action === 'quickBlock') failed.delete(Core.identity(root)); }
       cancelTransaction();
-      sendBackground(message.action === 'block' ? 'blockAuthor' : 'addAuthor', { author }).then(result => reply(result), () => reply({ ok: false, error: '保存作者名单失败，请刷新页面。' }));
+      sendBackground(message.action !== 'whitelist' ? 'blockAuthor' : 'addAuthor', { author }).then(result => {
+        if (message.action === 'quickBlock') notice(`已屏蔽作者：${author.name || '此作者'}${!settings.enabled || !settings.skipBlocked ? '（过滤已暂停或未开启）' : ''}`, false, true);
+        schedule(100); reply(result);
+      }, () => { if (message.action === 'quickBlock') notice('屏蔽保存失败，请刷新页面重试。', false, true); reply({ ok: false, error: '保存作者名单失败，请刷新页面。' }); });
       return true;
     }
   });

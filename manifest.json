@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "抖音清爽刷 · 广告与直播跳过",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "在抖音网页版推荐流中自动跳过有明确标识的广告、推广和直播推荐，带货过滤可单独开启。所有设置保存在本机。",
   "permissions": [
     "storage"
@@ -29,6 +29,12 @@
         "default": "Alt+Shift+S"
       },
       "description": "开启或暂停自动跳过"
+    },
+    "block-current-author": {
+      "suggested_key": {
+        "default": "Alt+Shift+B"
+      },
+      "description": "快速屏蔽当前推荐视频作者"
     }
   },
   "content_scripts": [

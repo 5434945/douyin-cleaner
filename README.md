@@ -1,12 +1,12 @@
-# 抖音清爽刷 v0.4.4
+# 抖音清爽刷 v0.4.5
 
-[下载 v0.4.4 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.4.4/douyin-cleaner-v0.4.4.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
+[下载 v0.4.5 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.4.5/douyin-cleaner-v0.4.5.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
 
 Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 中，自动跳过有明确页面标识或接口广告标记的广告、推广和直播推荐。商品卡、购买入口可用单独开关过滤。
 
 ## 安装（约 1 分钟）
 
-1. 将 `douyin-cleaner-v0.4.4.zip` 解压到一个长期保留的文件夹。
+1. 将 `douyin-cleaner-v0.4.5.zip` 解压到一个长期保留的文件夹。
 2. Chrome 打开 `chrome://extensions`；Edge 打开 `edge://extensions`。
 3. 开启页面上的「开发者模式」。
 4. 点击「加载已解压的扩展程序」（部分 Edge 版本称「加载解压缩的扩展」）。
@@ -157,3 +157,9 @@ Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 
 加入实站观察的 `.xgplayer-shop-anchor` 购物组件。即便组件不是 a 链接且没有商品 data-e2e 标识，也可归为带货视频；只检查当前可见卡片，仍排除简介、昵称、评论和隐藏组件。
 
 带货过滤默认关闭，已有设置保留。需要跳过这类视频时，在插件面板开启“带货视频”。该选项独立于广告与推广，不会因发现购物入口而自动改动用户开关。
+
+## v0.4.5 快捷屏蔽作者
+
+在推荐流按 Alt + Shift + B，把当前作者加入插件黑名单；开启自动过滤与黑名单过滤时自动跳过。会显示保存成功提示，可在管理黑名单中移除。正在输入或有弹窗时不执行快捷屏蔽。不修改抖音原生账号拉黑关系，暂停设置保持不变。
+
+快捷键由 Chrome 命令系统注册。如与其他扩展冲突，可在 Chrome 的“扩展程序 → 键盘快捷键”中修改“快速屏蔽当前推荐视频作者”。

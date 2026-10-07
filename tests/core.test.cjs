@@ -68,7 +68,7 @@ test('证据只保留允许的规则和抖音作品链接，剔除查询信息�
   assert.equal(items[1].evidence, undefined);
 });
 
-function backgroundHarness() {
+function backgroundHarness(options = {}) {
   const data = {};
   const listeners = [];
   let installed;
@@ -77,6 +77,7 @@ function backgroundHarness() {
   const chrome = {
     runtime: { id: 'unit-test-extension', onInstalled: { addListener(fn) { installed = fn; } }, onMessage: { addListener(fn) { listeners.push(fn); } } },
     commands: { onCommand: { addListener(fn) { command = fn; } } },
+    tabs: { query: async () => options.tabs || [{ id: 1 }], sendMessage: async (id, message) => options.send ? options.send(id, message) : { ok: true } },
     storage: { local: {
       async get(keys) { await new Promise(resolve => setTimeout(resolve, 2)); return Object.fromEntries((Array.isArray(keys) ? keys : [keys]).filter(key => key in data).map(key => [key, clone(data[key])])); },
       async set(update) { await new Promise(resolve => setTimeout(resolve, 2)); Object.assign(data, clone(update)); }
@@ -208,4 +209,16 @@ test('拒绝外部、非推荐页面、非法 ID 的手动广告写入，满额�
   assert.equal((await h.dispatch({ ...message, video: { id: '99999' } })).ok, false);
   assert.equal(h.data.settings.learnedAds.length, 2000);
   assert.equal(h.data.settings.learnedAds[0].id, '0');
+});
+
+test('快捷屏蔽发送到当前标签，允许页面回调后台保存，不会队列死锁', async () => {
+  let h;
+  h = backgroundHarness({ send: async (id, message) => { assert.equal(id, 1); assert.equal(message.action, 'quickBlock'); return h.dispatch({ action: 'blockAuthor', author: { id: 'MS4w.quick', name: '快捷作者' } }); } });
+  await h.command('block-current-author'); assert.equal(h.data.settings.blacklist.at(-1).id, 'MS4w.quick');
+  await h.command('toggle-enabled'); assert.equal(h.data.settings.enabled, false);
+});
+test('快捷屏蔽忽略无接收器的标签，其他命令不触发作者操作', async () => {
+  let sent = 0; const h = backgroundHarness({ send: async () => { sent++; throw new Error('no receiver'); } });
+  await h.command('unknown'); assert.equal(sent, 0);
+  await h.command('block-current-author'); assert.equal(sent, 1); assert.deepEqual(h.data, {});
 });

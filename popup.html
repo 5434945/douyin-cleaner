@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header><div class="brand-icon" aria-hidden="true">↧</div><div><h1>抖音清爽刷</h1><p>留下想看的，跳过打扰。</p></div><span class="version">v0.4.4</span></header>
+  <header><div class="brand-icon" aria-hidden="true">↧</div><div><h1>抖音清爽刷</h1><p>留下想看的，跳过打扰。</p></div><span class="version">v0.4.5</span></header>
   <main>
     <section class="master"><div><strong>自动过滤</strong><small>快捷键 Alt + Shift + S</small></div><label class="switch"><input id="enabled" type="checkbox" aria-label="自动过滤"><span></span></label></section>
     <section class="status" aria-live="polite"><span id="status-dot" class="dot"></span><div><strong id="status">正在连接…</strong><p id="evidence">打开抖音的「推荐」页面开始使用</p></div></section>
@@ -18,7 +18,7 @@
     </section>
     <section class="settings blacklist-setting"><label class="setting"><span><strong>黑名单作者</strong><small>自动跳过名单内作者的视频和直播</small></span><span class="switch"><input id="skipBlocked" type="checkbox"><span></span></span></label></section>
     <section class="stats" aria-label="累计成功跳过"><div><b id="ad-count">0</b><span>广告推广</span></div><div><b id="live-count">0</b><span>直播推荐</span></div><div><b id="shopping-count">0</b><span>带货视频</span></div><div><b id="blocked-count">0</b><span>黑名单</span></div></section>
-    <section class="actions"><button id="allow" type="button">本条放行</button><button id="undo" type="button" disabled>返回并放行</button><button id="mark-ad" type="button" class="wide">标记本条为广告</button><button id="block" type="button" class="wide">屏蔽当前作者</button><button id="whitelist" type="button" class="wide">将当前作者加入白名单</button></section>
+    <section class="actions"><button id="allow" type="button">本条放行</button><button id="undo" type="button" disabled>返回并放行</button><button id="mark-ad" type="button" class="wide">标记本条为广告</button><button id="block" type="button" class="wide">屏蔽当前作者 · Alt + Shift + B</button><button id="whitelist" type="button" class="wide">将当前作者加入白名单</button></section>
     <p id="feedback" class="feedback" role="status" hidden></p>
     <details><summary>更多设置</summary><div class="details-body">
       <label class="setting"><span><strong>跳过提示</strong><small>提示中可直接返回并放行</small></span><span class="switch"><input id="showNotice" type="checkbox"><span></span></span></label>

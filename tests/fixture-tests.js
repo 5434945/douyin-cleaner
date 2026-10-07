@@ -332,6 +332,9 @@ document.getElementById('run').addEventListener('click', async event => {
     assert((await fixtureDispatch({ target: 'dy-cleaner-background', action: 'removeLearnedAd', video: { id: learned[0].id } })).ok);
     await delay(1100); assert(model.index === 0 && storageData.stats.ad === 0);
   });
+  await check('快捷屏蔽当前作者并自动跳过，反馈保存成功', async () => { const target = item(), next = item(); next.authorId = 'MS4w.other'; await reset([target, next], { blacklist: [] }); assert((await pageAction('quickBlock')).ok); await until(() => storageData.stats.blocked === 1); assert(model.index === 1 && storageData.settings.blacklist[0].id === 'MS4w.author'); });
+  await check('输入时快捷屏蔽不误操作作者', async () => { await reset([item(), item()], { blacklist: [] }); document.getElementById('editor').focus(); try { assert(!(await pageAction('quickBlock')).ok); assert(storageData.settings.blacklist.length === 0 && model.index === 0); } finally { document.getElementById('editor').blur(); } });
+  await check('快捷屏蔽保存名单但不会打开用户暂停的过滤', async () => { await reset([item(), item()], { enabled: false, blacklist: [] }); assert((await pageAction('quickBlock')).ok); await delay(500); assert(storageData.settings.blacklist.length === 1 && storageData.settings.enabled === false && model.index === 0); });
   await reset([item(), item('ad'), item()], { skipDelay: 800, showNotice: true });
   document.getElementById('summary').textContent = `已完成 · 通过 ${passed} · 失败 ${failedCount} · 总计 ${passed + failedCount}`;
   document.getElementById('summary').dataset.result = failedCount ? 'fail' : 'pass';

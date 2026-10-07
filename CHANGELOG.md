@@ -6,6 +6,14 @@
 
 建议使用 [最新 Release](https://github.com/5434945/douyin-cleaner/releases/latest)。历史版本用于审阅演进；本地测试不等同于已安装扩展的完整实站验证。
 
+## [v0.4.5](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.5) — 新增快速拉黑快捷键 Alt + Shift + B
+
+- 在推荐视频上按 Alt + Shift + B，将当前作者加入插件黑名单；过滤开启时按现有规则跳过，暂停时仅保存。
+- 面板显示快捷键；支持移除名单撤销。输入、弹窗、后台标签页和非推荐页面受到保护。
+- 后台转发快捷键消息不进入存储队列，避免页面回调保存造成死锁；无新增权限。
+
+**验证：** Node 30 项、Chrome 本地回归 92 项通过；验证快捷键消息转发、保存和暂停保护。实际 Chrome 快捷键注册需安装后确认，冲突时可在 chrome://extensions/shortcuts 修改。
+
 ## [v0.4.4](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.4) — 修复播放器购物入口漏识别
 
 - 补充 xgplayer-shop-anchor 购物入口，覆盖没有商品 data-e2e 属性或 href 的购物锚点。

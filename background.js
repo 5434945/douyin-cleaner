@@ -15,9 +15,17 @@ async function initialize() {
   await chrome.storage.local.set(update);
 }
 chrome.runtime.onInstalled.addListener(() => serialize(initialize));
-chrome.commands.onCommand.addListener(command => {
+chrome.commands.onCommand.addListener(async command => {
+  if (command === 'block-current-author') {
+    // Do not hold the storage queue while the page sends its save request back.
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id != null) await chrome.tabs.sendMessage(tab.id, { target: 'dy-cleaner-page', action: 'quickBlock' });
+    } catch { /* Closed tabs and pages without the extension are harmless. */ }
+    return;
+  }
   if (command !== 'toggle-enabled') return;
-  serialize(async () => {
+  return serialize(async () => {
     const { settings } = await chrome.storage.local.get('settings');
     const next = Core.normalizeSettings(settings);
     next.enabled = !next.enabled;
