@@ -23,6 +23,7 @@ function renderSettings() {
   $('skipDelay').value = settings.skipDelay;
   $('delay-value').value = `${settings.skipDelay} ms`;
   renderBlacklist();
+  renderLearnedAds();
   $('authors').replaceChildren();
   $('empty-authors').hidden = settings.whitelist.length > 0;
   for (const author of settings.whitelist) {
@@ -34,6 +35,17 @@ function renderSettings() {
     remove.type = 'button'; remove.textContent = '移除'; remove.setAttribute('aria-label', `移除白名单作者 ${name.textContent}`);
     remove.addEventListener('click', () => background('patchSettings', { patch: { whitelist: settings.whitelist.filter(item => item.id !== author.id) } }).catch(error => feedback(error.message, true)));
     row.append(name, remove); $('authors').append(row);
+  }
+}
+function renderLearnedAds() {
+  $('learned-count').textContent = settings.learnedAds.length;
+  $('learned-ads').replaceChildren(); $('empty-learned').hidden = settings.learnedAds.length > 0;
+  for (const entry of settings.learnedAds) {
+    const row = document.createElement('li'), title = document.createElement('span'), remove = document.createElement('button');
+    title.textContent = entry.title || `视频 ${entry.id}`; title.title = entry.id;
+    remove.type = 'button'; remove.textContent = '移除'; remove.setAttribute('aria-label', `移除广告标记 ${entry.id}`);
+    remove.addEventListener('click', () => background('removeLearnedAd', { video: { id: entry.id } }).then(() => feedback('已移除广告标记。')).catch(error => feedback(error.message, true)));
+    row.append(title, remove); $('learned-ads').append(row);
   }
 }
 function renderBlacklist() {
@@ -80,7 +92,7 @@ function diagnosticData() {
 async function pageMessage(action) {
   if (!activeTab?.id) throw new Error('请在抖音推荐页面中打开插件。');
   try {
-    const result = await chrome.tabs.sendMessage(activeTab.id, { target: 'dy-cleaner-page', action });
+    const result = await chrome.tabs.sendMessage(activeTab.id, { target: 'dy-cleaner-page', action, ...(['markAd', 'unmarkAd'].includes(action) ? { expectedVideoId: pageStatus?.current?.videoId } : {}) });
     if (!result?.ok) throw new Error(result?.error || '页面未响应，请刷新抖音页面。');
     return result;
   } catch (error) {
@@ -104,6 +116,8 @@ async function refreshStatus() {
     const usable = Boolean(pageStatus?.supported && pageStatus.current?.identified);
     $('status-dot').classList.toggle('active', Boolean(usable && settings.enabled));
     $('allow').disabled = !usable;
+    $('mark-ad').disabled = !usable || !pageStatus?.current?.videoId;
+    $('mark-ad').textContent = pageStatus?.current?.markedAd ? '取消本条广告标记' : '标记本条为广告';
     $('undo').disabled = !pageStatus?.canUndo;
     $('block').disabled = !usable || !pageStatus?.current?.author?.id;
     $('whitelist').disabled = !usable || !pageStatus?.current?.author?.id;
@@ -120,6 +134,13 @@ for (const action of ['allow', 'undo', 'whitelist', 'block']) $(action).addEvent
     feedback(({ allow: '本条已放行 10 分钟。', undo: '正在返回，目标内容已放行。', whitelist: '已加入作者白名单。', block: '已屏蔽当前作者，可在黑名单中移除。' })[action]);
     await refreshStatus();
   } catch (error) { feedback(error.message, true); }
+});
+$('mark-ad').addEventListener('click', async () => {
+  const removing = Boolean(pageStatus?.current?.markedAd);
+  $('mark-ad').disabled = true;
+  try { await pageMessage(removing ? 'unmarkAd' : 'markAd'); feedback(removing ? '已取消本条广告标记，并临时放行。' : '已记住本条广告，以后再刷到会自动跳过。'); }
+  catch (error) { feedback(error.message, true); }
+  await refreshStatus();
 });
 $('resetStats').addEventListener('click', async () => {
   try { await background('resetStats'); feedback('已清空本地统计。'); } catch (error) { feedback(error.message, true); }

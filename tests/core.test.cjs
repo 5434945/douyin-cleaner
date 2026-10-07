@@ -175,3 +175,37 @@ test('Manifest 限定抖音域名，所有脚本和 UI 资源存在', () => {
   assert.equal(manifest.content_scripts[0].matches.includes('<all_urls>'), false);
   for (const file of [...manifest.content_scripts.flatMap(entry => [...entry.js, ...(entry.css || [])]), manifest.background.service_worker, manifest.action.default_popup, ...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon)]) assert.ok(fs.existsSync(path.join(__dirname, '..', file)), file);
 });
+
+
+test('手动广告标记只接受字符串视频 ID，去重、清理字段、限制数量', () => {
+  assert.deepEqual(Core.normalizeSettings().learnedAds, []);
+  assert.deepEqual(Core.normalizeLearnedAds([{ id: 123 }, { id: 'media:123' }, { id: '123', title: '  旧 标题 ' }, { id: '123', title: '新标题', author: '不保存' }]), [{ id: '123', title: '新标题' }]);
+  assert.equal(Core.normalizeLearnedAds(Array.from({ length: 2001 }, (_, i) => ({ id: String(i) }))).length, 2000);
+  assert.equal(Core.normalizeLearnedAds([{ id: '123', title: 'a'.repeat(150) }])[0].title.length, 100);
+  assert.deepEqual(Core.normalizeSettings({ learnedAds: [] }).learnedAds, []);
+  assert.equal(Core.promotionEvidence('华为 手机推荐', [{ type: 'ad', rule: 'ad-user' }]), null);
+});
+test('手动广告标记并发保存、重复更新、升级保留、撤销不会丢失其他条目', async () => {
+  const h = backgroundHarness();
+  await Promise.all(['123', '456'].map(id => h.dispatch({ action: 'markAd', video: { id, title: '广告', url: '不得保存', author: '不得保存' } })));
+  assert.deepEqual(h.data.settings.learnedAds.map(v => v.id), ['123', '456']);
+  await h.dispatch({ action: 'markAd', video: { id: '123', title: '新的标题' } });
+  assert.equal(h.data.settings.learnedAds.length, 2);
+  assert.deepEqual(h.data.settings.learnedAds[1], { id: '123', title: '新的标题' });
+  h.installed(); await h.dispatch({ action: 'patchSettings', patch: { skipAds: false } }, h.popup);
+  assert.equal(h.data.settings.learnedAds.length, 2);
+  await h.dispatch({ action: 'removeLearnedAd', video: { id: '123' } }, h.popup);
+  assert.deepEqual(h.data.settings.learnedAds.map(v => v.id), ['456']);
+  await h.dispatch({ action: 'removeLearnedAd', video: { id: '456' } });
+  assert.deepEqual(h.data.settings.learnedAds, []);
+});
+test('拒绝外部、非推荐页面、非法 ID 的手动广告写入，满额不静默丢旧条目', async () => {
+  const h = backgroundHarness();
+  const message = { action: 'markAd', video: { id: '123', title: '广告' } };
+  for (const sender of [h.popup, { ...h.sender, id: 'other' }, { ...h.sender, url: 'https://example.com/' }]) assert.equal(await h.dispatch(message, sender), undefined);
+  assert.equal(await h.dispatch({ ...message, video: { id: '../123' } }), undefined);
+  h.data.settings = Core.normalizeSettings({ learnedAds: Array.from({ length: 2000 }, (_, i) => ({ id: String(i) })) });
+  assert.equal((await h.dispatch({ ...message, video: { id: '99999' } })).ok, false);
+  assert.equal(h.data.settings.learnedAds.length, 2000);
+  assert.equal(h.data.settings.learnedAds[0].id, '0');
+});

@@ -287,7 +287,7 @@
     tick();
     return {
       ok: true, status, supported: Core.supportedPage(location.href), version: chrome.runtime.getManifest().version,
-      current: current ? { type: current.detection.type, rule: current.detection.rule, evidence: current.detection.evidence, author: current.detection.author, identified: Boolean(current.key) } : null,
+      current: current ? { type: current.detection.type, rule: current.detection.rule, evidence: current.detection.evidence, author: current.detection.author, identified: Boolean(current.key), videoId: Core.videoId(current.root), markedAd: settings.learnedAds.some(item => item.id === Core.videoId(current.root)) } : null,
       canUndo: Boolean(lastSkipped && current?.key === lastSkipped.destination && !transaction),
       rules: current?.detection.reasons || [],
       selectorHits: { card: Boolean(current), active: Boolean(current?.root.matches(Core.SELECTORS.active) || current?.root.querySelector(Core.SELECTORS.active)), next: Boolean(current && Core.navigationControl(current.root, 'next')) }
@@ -302,6 +302,19 @@
       const key = root && Core.identity(root);
       if (!key) { reply({ ok: false, error: '未读取到当前内容，请进入推荐流。' }); return; }
       allowKey(key); cancelTransaction(); notice('本条已放行 10 分钟。', false, true); schedule(100); reply({ ok: true });
+    } else if (['markAd', 'unmarkAd'].includes(message.action)) {
+      const root = Core.activeCard();
+      const id = Core.videoId(root);
+      if (!Core.supportedPage(location.href) || !root?.querySelector('video') || !id) { reply({ ok: false, error: '未读取到稳定视频 ID，请停留在推荐视频上再试。' }); return; }
+      if (message.expectedVideoId !== id) { reply({ ok: false, error: '视频已切换，请重新确认当前视频再标记。' }); return; }
+      const key = Core.identity(root);
+      cancelTransaction();
+      sendBackground(message.action === 'markAd' ? 'markAd' : 'removeLearnedAd', { video: { id, title: Core.cleanText(root.querySelector(Core.SELECTORS.description)?.textContent).slice(0, 100) } }).then(result => {
+        if (message.action === 'markAd') { allowed.delete(key); failed.delete(key); }
+        else allowKey(key);
+        schedule(100); reply(result);
+      }, () => reply({ ok: false, error: '保存广告标记失败，请刷新页面或检查标记名单是否已满。' }));
+      return true;
     } else if (['whitelist', 'block'].includes(message.action)) {
       const root = Core.activeCard();
       const author = root && Core.authorInfo(root);

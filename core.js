@@ -4,7 +4,7 @@
   const seed = scope.DouyinCleanerBlocklist || (typeof module !== 'undefined' && module.exports ? require('./blocked-authors.js') : []);
   const DEFAULTS = Object.freeze({
     enabled: true, skipAds: true, skipLive: true, skipShopping: false,
-    showNotice: true, iconDetection: true, apiDetection: true, shieldAds: true, skipDelay: 250, settingsRevision: 1, whitelist: [], skipBlocked: true, collectBrandPromoters: true, blacklist: seed, collectionExclusions: []
+    showNotice: true, iconDetection: true, apiDetection: true, shieldAds: true, skipDelay: 250, settingsRevision: 1, whitelist: [], skipBlocked: true, collectBrandPromoters: true, blacklist: seed, collectionExclusions: [], learnedAds: []
   });
   const SELECTORS = Object.freeze({
     cards: '[data-e2e="feed-item"]',
@@ -40,7 +40,20 @@
     settings.whitelist = Array.isArray(value.whitelist) ? value.whitelist.filter(item => item && typeof item.id === 'string' && /^[A-Za-z0-9_.-]{1,180}$/.test(item.id)).slice(0, 100).map(item => ({ id: item.id, name: cleanText(item.name).slice(0, 80) })) : [];
     settings.blacklist = normalizeAuthors(Array.isArray(value.blacklist) ? value.blacklist : seed, 1000);
     settings.collectionExclusions = Array.isArray(value.collectionExclusions) ? [...new Set(value.collectionExclusions.filter(id => typeof id === 'string' && /^[A-Za-z0-9_.-]{1,180}$/.test(id)))].slice(0, 1000) : [];
+    settings.learnedAds = normalizeLearnedAds(value.learnedAds);
     return settings;
+  }
+  function normalizeLearnedAds(items) {
+    const unique = new Map();
+    for (const item of Array.isArray(items) ? items : []) {
+      if (item && typeof item.id === 'string' && /^\d{1,30}$/.test(item.id)) unique.set(item.id, { id: item.id, title: cleanText(item.title).slice(0, 100) });
+    }
+    return Array.from(unique.values()).slice(0, 2000);
+  }
+  function videoId(root) {
+    if (!root) return '';
+    const match = identity(root).match(/^data-(?:e2e-vid|e2e-aweme-id|aweme-id):(\d{1,30})$/);
+    return match ? match[1] : '';
   }
   function normalizeAuthors(items, limit = 1000) {
     const unique = new Map();
@@ -150,6 +163,8 @@
     const reasons = [];
     const author = authorInfo(root);
     const add = (type, rule, evidence) => reasons.push({ type, rule, evidence });
+    const id = videoId(root);
+    if (id && options.learnedAds?.some(item => item.id === id)) add('ad', 'ad-user', '你曾将这条视频标记为广告');
     if (signalNodes(root, SELECTORS.live).length) add('live', 'live-card', '直播卡片标识');
     else if (findLabel(root, LIVE_ENTRY)) add('live', 'live-entry', '进入直播间入口');
     if (options.apiDetection && metadata?.ad === true) add('ad', 'ad-api', '推荐接口明确标记为广告');
@@ -242,7 +257,7 @@
     }
     return null;
   }
-  const api = Object.freeze({ DEFAULTS, SELECTORS, cleanText, normalizeSettings, normalizeAuthors, parseBlacklist, promotionEvidence, supportedPage, visible, usable, classify, activeCard, identity, authorInfo, navigationControl });
+  const api = Object.freeze({ DEFAULTS, SELECTORS, cleanText, normalizeSettings, normalizeLearnedAds, videoId, normalizeAuthors, parseBlacklist, promotionEvidence, supportedPage, visible, usable, classify, activeCard, identity, authorInfo, navigationControl });
   scope.DouyinCleanerCore = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

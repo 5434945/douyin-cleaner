@@ -46,6 +46,18 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       const { settings } = await chrome.storage.local.get('settings');
       await chrome.storage.local.set({ settings: Core.normalizeSettings({ ...settings, enabled: message.enabled }) });
     };
+  } else if (['markAd', 'removeLearnedAd'].includes(message.action) && typeof message.video?.id === 'string' && /^\d{1,30}$/.test(message.video.id) && (message.action !== 'markAd' || sender.tab)) {
+    job = async () => {
+      const { settings } = await chrome.storage.local.get('settings');
+      const next = Core.normalizeSettings(settings);
+      const remaining = next.learnedAds.filter(item => item.id !== message.video.id);
+      if (message.action === 'markAd') {
+        if (remaining.length >= 2000) throw new Error('广告标记已满，请先移除部分标记。');
+        remaining.push({ id: message.video.id, title: message.video.title });
+      }
+      next.learnedAds = Core.normalizeLearnedAds(remaining);
+      await chrome.storage.local.set({ settings: next });
+    };
   } else if (['addAuthor', 'blockAuthor', 'collectPromoter'].includes(message.action) && sender.tab && typeof message.author?.id === 'string') {
     job = async () => {
       const { settings } = await chrome.storage.local.get('settings');

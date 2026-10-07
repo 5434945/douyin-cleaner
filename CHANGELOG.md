@@ -6,6 +6,14 @@
 
 建议使用 [最新 Release](https://github.com/5434945/douyin-cleaner/releases/latest)。历史版本用于审阅演进；本地测试不等同于已安装扩展的完整实站验证。
 
+## [v0.4.0](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.0) — 手动标记本条视频为广告
+
+- 新增手动广告标记、取消标记和名单管理；保存稳定视频 ID，下次遇到同一 ID 时跳过。
+- 标记前校验弹窗所指的视频 ID，防止切换后误标；最多保存 2000 条。
+- 本地规则学习不使用 AI 训练，不推断同作者的其他视频或重新上传的新视频 ID。
+
+**验证：** Node 24 项、Chrome 本地回归 81 项通过；面板标记和移除已验证。
+
 ## [v0.3.1](https://github.com/5434945/douyin-cleaner/releases/tag/v0.3.1) — 补充作者旁广告标签与 SVG 标识
 
 - 补充昵称外层中的独立广告标签、嵌套广告节点、可读 SVG 广告标签及已观察到的广告图形。

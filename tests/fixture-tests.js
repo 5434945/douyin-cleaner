@@ -9,7 +9,7 @@ let passed = 0;
 let failedCount = 0;
 let running = false;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const pageAction = action => fixtureDispatch({ target: 'dy-cleaner-page', action });
+const pageAction = (action, fields = {}) => fixtureDispatch({ target: 'dy-cleaner-page', action, ...fields });
 const settingsPatch = patch => fixtureDispatch({ target: 'dy-cleaner-background', action: 'patchSettings', patch });
 const assert = (condition, message = '断言未通过') => { if (!condition) throw new Error(message); };
 async function until(condition, timeout = 5500) {
@@ -266,6 +266,48 @@ document.getElementById('run').addEventListener('click', async event => {
     await delay(650); assert(storageData.settings.blacklist.length === 0);
     const other = numericItem(); other.extra = '#享界s9t合作推广'; await reset([other, item()], { blacklist: [], skipDelay: 1000 }); cardsNode.firstElementChild.append(document.createElement('video'));
     await pageAction('allow'); await delay(1100); assert(storageData.settings.blacklist.length === 0);
+  });
+  const learned = [{ id: '88800001', title: '手动广告' }];
+  const learnedItem = () => ({ ...item(), id: learned[0].id });
+  await check('手动标记保存后自动跳过本条且只计一次', async () => {
+    const ad = learnedItem(); await reset([ad, item()], { enabled: false }); cardsNode.firstElementChild.append(document.createElement('video'));
+    assert((await pageAction('markAd', { expectedVideoId: ad.id })).ok);
+    assert(storageData.settings.learnedAds[0].id === ad.id);
+    assert((await pageAction('status')).current.markedAd);
+    await settingsPatch({ enabled: true }); await until(() => storageData.stats.ad === 1); await delay(450);
+    assert(model.index === 1 && model.clicks === 1 && storageData.stats.ad === 1);
+  });
+  await check('再次刷到同一视频直接跳过，同作者其他视频保留', async () => {
+    await reset([item(), learnedItem(), item()], { learnedAds: learned }); await delay(650);
+    assert(model.index === 0); navigate(1); await until(() => storageData.stats.ad === 1);
+    assert(model.index === 2 && model.clicks === 1);
+  });
+  await check('撤销本条标记后重新遇到不会沿用旧标记', async () => {
+    const ad = learnedItem(); await reset([ad, item()], { learnedAds: learned, enabled: false }); cardsNode.firstElementChild.append(document.createElement('video'));
+    assert((await pageAction('unmarkAd', { expectedVideoId: ad.id })).ok);
+    assert(storageData.settings.learnedAds.length === 0);
+    await reset([learnedItem(), item()], { learnedAds: storageData.settings.learnedAds }); await delay(650);
+    assert(model.index === 0 && model.clicks === 0);
+  });
+  await check('手动广告记忆服从暂停、广告开关、白名单和放行', async () => {
+    for (const patch of [{ enabled: false }, { skipAds: false }, { whitelist: [{ id: 'MS4w.author', name: '作者' }] }]) {
+      await reset([learnedItem(), item()], { learnedAds: learned, ...patch }); await delay(650); assert(model.index === 0 && model.clicks === 0);
+    }
+    await reset([learnedItem(), item()], { learnedAds: learned, skipDelay: 1000 }); assert((await pageAction('allow')).ok); await delay(1100); assert(model.index === 0);
+  });
+  await check('不稳定 ID、非视频和过期面板选择不能误标另一条', async () => {
+    await reset([item(), item()], { enabled: false }); cardsNode.firstElementChild.append(document.createElement('video'));
+    assert(!(await pageAction('markAd', { expectedVideoId: '123' })).ok);
+    await reset([learnedItem(), item()], { enabled: false });
+    assert(!(await pageAction('markAd', { expectedVideoId: learned[0].id })).ok);
+    cardsNode.firstElementChild.append(document.createElement('video'));
+    assert(!(await pageAction('markAd', { expectedVideoId: '999' })).ok);
+    assert(storageData.settings.learnedAds.length === 0 && model.index === 0);
+  });
+  await check('从管理列表移除标记会撤销等待中的跳过', async () => {
+    await reset([learnedItem(), item()], { learnedAds: learned, skipDelay: 1000 }); await delay(100);
+    assert((await fixtureDispatch({ target: 'dy-cleaner-background', action: 'removeLearnedAd', video: { id: learned[0].id } })).ok);
+    await delay(1100); assert(model.index === 0 && storageData.stats.ad === 0);
   });
   await reset([item(), item('ad'), item()], { skipDelay: 800, showNotice: true });
   document.getElementById('summary').textContent = `已完成 · 通过 ${passed} · 失败 ${failedCount} · 总计 ${passed + failedCount}`;
