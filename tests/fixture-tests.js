@@ -65,6 +65,9 @@ const observedAdGlyph = 'M9.492 2.004L8.22 2.22c.216.336.408.72.588 1.128h-4.38v
 function glyphBadge(root) {
   root.querySelector('.account').insertAdjacentHTML('beforeend', `<svg viewBox="0 0 60 32" width="30" height="16"><path d="${observedAdGlyph}"/></svg>`);
 }
+function shopAnchor(root) {
+  root.insertAdjacentHTML('beforeend', '<div class="xgplayer-shop-anchor"><div><span role="img">🛒</span><div>购物<span> | </span> 泡面先生黑鸭火鸡面</div></div></div>');
+}
 async function audioTransition(initialMuted) {
   await reset([item('ad'), item()], { enabled: false });
   const video = document.createElement('video'); video.muted = initialMuted; video.volume = 0.65; cardsNode.firstElementChild.append(video);
@@ -132,6 +135,9 @@ document.getElementById('run').addEventListener('click', async event => {
   await check('透明祖先中的广告标识，不触发', () => { const root = sample(item('ad')); root.querySelector('.account').style.opacity = '0'; assert(classify(root).type === 'normal'); });
   await check('文案中提及其他作者，不当成当前作者', () => { const root = sample(item()); root.querySelector('[data-e2e="video-avatar"]').remove(); root.querySelector('[data-e2e="video-desc"]').innerHTML = '<a href="https://www.douyin.com/user/MS4w.someone">@其他作者</a>'; assert(originalCore.authorInfo(root).id === ''); });
   await check('评论里提到广告，不触发', () => { const root = sample(item()); root.querySelector('[data-e2e="video-info"]').insertAdjacentHTML('beforeend', '<div data-e2e="comment-list"><span>广告</span></div>'); assert(classify(root).type === 'normal'); });
+  await check('实站播放器购物组件识别，仍服从带货独立开关', () => { const root = sample(item()); shopAnchor(root); assert(classify(root, { skipShopping: true }).type === 'shopping'); assert(classify(root).type === 'normal'); });
+  await check('文案和评论中的购物组件不作为当前商品入口', () => { const root = sample(item()); shopAnchor(root.querySelector('[data-e2e="video-desc"]')); root.insertAdjacentHTML('beforeend', '<div data-e2e="comment-list"><div class="xgplayer-shop-anchor">购物 | 示例商品</div></div>'); assert(classify(root, { skipShopping: true }).type === 'normal'); });
+  await check('隐藏播放器购物组件不触发跳过', () => { const root = sample(item()); shopAnchor(root); root.querySelector('.xgplayer-shop-anchor').hidden = true; assert(classify(root, { skipShopping: true }).type === 'normal'); });
   await check('带货独立开关默认关闭', () => { const root = sample(item('shopping')); assert(classify(root).type === 'normal'); assert(classify(root, { skipShopping: true }).type === 'shopping'); });
   await check('商品购买链接识别', () => { const root = sample(item()); root.insertAdjacentHTML('beforeend', '<a href="https://haohuo.jinritemai.com/product/123">立即购买</a>'); assert(classify(root, { skipShopping: true }).type === 'shopping'); });
   await check('作者白名单覆盖广告规则', () => assert(classify(sample(item('ad')), { whitelist: [{ id: 'MS4w.author', name: '作者' }] }).type === 'allowed'));
@@ -140,6 +146,9 @@ document.getElementById('run').addEventListener('click', async event => {
   fixtures.replaceChildren();
   await check('昵称旁独立广告标签实际跳过且只计一次', async () => { await reset([item(), item()]); nestedBadge(cardsNode.firstElementChild); await until(() => storageData.stats.ad === 1); await delay(450); assert(model.index === 1 && model.clicks === 1 && storageData.stats.ad === 1); });
   await check('实站广告字形变体实际跳过', async () => { await reset([item(), item()]); glyphBadge(cardsNode.firstElementChild); await until(() => storageData.stats.ad === 1); assert(model.index === 1 && model.clicks === 1); });
+  await check('播放器购物入口自动跳过且只计一次', async () => { await reset([item(), item()], { skipShopping: true }); shopAnchor(cardsNode.firstElementChild); await until(() => storageData.stats.shopping === 1); await delay(400); assert(model.index === 1 && model.clicks === 1 && storageData.stats.shopping === 1); });
+  await check('播放器购物入口晚出现时重新检测', async () => { await reset([item(), item()], { skipShopping: true }); await delay(650); assert(model.index === 0); shopAnchor(cardsNode.firstElementChild); await until(() => storageData.stats.shopping === 1); assert(model.index === 1); });
+  await check('播放器购物入口服从关闭和作者白名单', async () => { for (const patch of [{ skipShopping: false }, { skipShopping: true, whitelist: [{ id: 'MS4w.author', name: '作者' }] }]) { await reset([item(), item()], patch); shopAnchor(cardsNode.firstElementChild); await delay(650); assert(model.index === 0 && model.clicks === 0); } });
   await check('广告跳过一次，确认成功后计数', async () => { await reset([item('ad'), item()]); await until(() => storageData.stats.ad === 1); await delay(800); assert(model.index === 1 && model.clicks === 1 && storageData.stats.ad === 1); });
   await check('连续广告和直播都跳过，不多跳正常视频', async () => { await reset([item('ad'), item('live'), item()]); await until(() => storageData.stats.live === 1); assert(model.index === 2 && model.clicks === 2 && storageData.stats.ad === 1); });
   await check('独立直播与旧视频共存时真实切换并计数', async () => {
@@ -345,4 +354,13 @@ document.getElementById('audio-regression').addEventListener('click', async () =
   await check('有声广告跳过后下一条保持有声和原音量', () => audioTransition(false));
   await check('用户原本静音时跳过后仍保留静音', () => audioTransition(true));
   document.getElementById('summary').textContent = `声音专项：通过 ${passed} · 失败 ${failedCount}`;
+});
+
+document.getElementById('shopping-regression').addEventListener('click', async () => {
+  passed = 0; failedCount = 0; results.replaceChildren();
+  await reset([], { enabled: false });
+  await check('识别实站播放器购物入口', () => { const root = sample(item()); shopAnchor(root); assert(originalCore.classify(root, originalCore.normalizeSettings({ skipShopping: true })).type === 'shopping'); });
+  fixtures.replaceChildren();
+  await check('开启带货过滤后购物入口实际跳过', async () => { await reset([item(), item()], { skipShopping: true }); shopAnchor(cardsNode.firstElementChild); await until(() => storageData.stats.shopping === 1); assert(model.index === 1); });
+  document.getElementById('summary').textContent = `购物入口专项：通过 ${passed} · 失败 ${failedCount}`;
 });

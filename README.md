@@ -1,12 +1,12 @@
-# 抖音清爽刷 v0.4.3
+# 抖音清爽刷 v0.4.4
 
-[下载 v0.4.3 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.4.3/douyin-cleaner-v0.4.3.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
+[下载 v0.4.4 安装包](https://github.com/5434945/douyin-cleaner/releases/download/v0.4.4/douyin-cleaner-v0.4.4.zip) · [更新记录](CHANGELOG.md) · [全部版本](https://github.com/5434945/douyin-cleaner/releases)
 
 Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 中，自动跳过有明确页面标识或接口广告标记的广告、推广和直播推荐。商品卡、购买入口可用单独开关过滤。
 
 ## 安装（约 1 分钟）
 
-1. 将 `douyin-cleaner-v0.4.3.zip` 解压到一个长期保留的文件夹。
+1. 将 `douyin-cleaner-v0.4.4.zip` 解压到一个长期保留的文件夹。
 2. Chrome 打开 `chrome://extensions`；Edge 打开 `edge://extensions`。
 3. 开启页面上的「开发者模式」。
 4. 点击「加载已解压的扩展程序」（部分 Edge 版本称「加载解压缩的扩展」）。
@@ -151,3 +151,9 @@ Chrome / Edge 浏览器插件。在 **抖音网页版的「推荐」视频流** 
 遮挡功能只遮挡广告画面，插件不再读写 video.muted、volume 或 defaultMuted，避免播放器把广告阶段的静音状态沿用到下一条。沿用既有 shieldAds 设置控制遮挡，不增加权限。原本有声或用户主动静音的状态都由播放器保留。
 
 若旧版已使抖音静音，更新并刷新页面后，请先用抖音播放器的声音按钮恢复一次声音；新版不会主动取消你自己的静音选择。
+
+## v0.4.4 播放器购物入口兼容
+
+加入实站观察的 `.xgplayer-shop-anchor` 购物组件。即便组件不是 a 链接且没有商品 data-e2e 标识，也可归为带货视频；只检查当前可见卡片，仍排除简介、昵称、评论和隐藏组件。
+
+带货过滤默认关闭，已有设置保留。需要跳过这类视频时，在插件面板开启“带货视频”。该选项独立于广告与推广，不会因发现购物入口而自动改动用户开关。

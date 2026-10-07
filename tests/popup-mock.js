@@ -3,7 +3,7 @@ const previewMode = new URLSearchParams(location.search).get('mode') || 'normal'
 const popupData = { settings: { enabled: true, skipAds: true, skipLive: true, skipShopping: false, showNotice: true, iconDetection: true, skipDelay: 250, settingsRevision: 1, whitelist: [] }, stats: { ad: 12, live: 8, shopping: 0 } };
 const listeners = [];
 window.chrome = {
-    runtime: { getManifest: () => ({ version: '0.4.3' }), async sendMessage(message) {
+    runtime: { getManifest: () => ({ version: '0.4.4' }), async sendMessage(message) {
     if (message.action === 'patchSettings') { const previous = { ...popupData.settings }; Object.assign(popupData.settings, message.patch); for (const fn of listeners) fn({ settings: { oldValue: previous, newValue: popupData.settings } }, 'local'); }
     if (message.action === 'removeLearnedAd') { popupData.settings.learnedAds = (popupData.settings.learnedAds || []).filter(v => v.id !== message.video.id); for (const fn of listeners) fn({ settings: { newValue: popupData.settings } }, 'local'); }
     if (message.action === 'resetStats') { popupData.stats = { ad: 0, live: 0, shopping: 0, blocked: 0, failures: 0 }; for (const fn of listeners) fn({ stats: { newValue: popupData.stats } }, 'local'); }
@@ -13,7 +13,7 @@ window.chrome = {
   tabs: { async query() { return [{ id: 1 }]; }, async sendMessage(id, message) {
     if (previewMode === 'disconnected') throw new Error('Could not establish connection. Receiving end does not exist.');
     if (previewMode === 'legacy' && message.action === 'status') return { ok: true, supported: true, version: '0.3.1', current: { identified: true, author: { id: 'MS4w.preview' } }, status: '检测中' };
-    if (previewMode === 'missing-id' && message.action === 'status') return { ok: true, supported: true, version: '0.4.3', current: { identified: true }, status: '未读取到视频 ID' };
+    if (previewMode === 'missing-id' && message.action === 'status') return { ok: true, supported: true, version: '0.4.4', current: { identified: true }, status: '未读取到视频 ID' };
     if (previewMode === 'hang' && message.action === 'markAd') return new Promise(() => {});
     if (previewMode === 'false-ack' && message.action === 'markAd') return { ok: true };
 

@@ -16,7 +16,7 @@
     metadata: '.account, [data-e2e="video-info"]',
     live: '[data-e2e="feed-live"]',
     ad: '[data-e2e="ad-link"], [data-e2e="ad-label"], [data-e2e="ad-tag"]',
-    shopping: '[data-e2e="product-card"], [data-e2e="goods-card"], [data-e2e="shopping-cart"], [data-e2e="video-product"]',
+    shopping: '.xgplayer-shop-anchor, [data-e2e="product-card"], [data-e2e="goods-card"], [data-e2e="shopping-cart"], [data-e2e="video-product"]',
     next: '[data-e2e="video-switch-next-arrow"], .xgplayer-playswitch-next, [aria-label="下一条"], [aria-label="下一个视频"]',
     previous: '[data-e2e="video-switch-prev-arrow"], .xgplayer-playswitch-prev, [aria-label="上一条"], [aria-label="上一个视频"]',
     excluded: '[data-e2e="video-desc"], [data-e2e="feed-video-nickname"], [data-e2e="video-avatar"], [data-e2e="live-avatar"], [data-e2e*="comment"], [role="dialog"], #dy-cleaner-ui'

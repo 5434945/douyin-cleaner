@@ -6,6 +6,13 @@
 
 建议使用 [最新 Release](https://github.com/5434945/douyin-cleaner/releases/latest)。历史版本用于审阅演进；本地测试不等同于已安装扩展的完整实站验证。
 
+## [v0.4.4](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.4) — 修复播放器购物入口漏识别
+
+- 补充 xgplayer-shop-anchor 购物入口，覆盖没有商品 data-e2e 属性或 href 的购物锚点。
+- 只检查当前卡片中的可见购物入口，排除评论、昵称、隐藏节点；保留用户带货开关设置。
+
+**验证：** Node 28 项、Chrome 本地回归 89 项通过；使用实站读取到的购物入口结构构建回归，未确认已安装扩展更新后的同一视频切换。
+
 ## [v0.4.3](https://github.com/5434945/douyin-cleaner/releases/tag/v0.4.3) — 修复跳过广告后下一条视频静音
 
 - 删除广告遮挡期间对 muted 和音量的写入，仅保留视觉遮挡，避免播放器继承静音状态。

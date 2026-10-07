@@ -7,14 +7,14 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header><div class="brand-icon" aria-hidden="true">↧</div><div><h1>抖音清爽刷</h1><p>留下想看的，跳过打扰。</p></div><span class="version">v0.4.3</span></header>
+  <header><div class="brand-icon" aria-hidden="true">↧</div><div><h1>抖音清爽刷</h1><p>留下想看的，跳过打扰。</p></div><span class="version">v0.4.4</span></header>
   <main>
     <section class="master"><div><strong>自动过滤</strong><small>快捷键 Alt + Shift + S</small></div><label class="switch"><input id="enabled" type="checkbox" aria-label="自动过滤"><span></span></label></section>
     <section class="status" aria-live="polite"><span id="status-dot" class="dot"></span><div><strong id="status">正在连接…</strong><p id="evidence">打开抖音的「推荐」页面开始使用</p></div></section>
     <section class="settings" aria-label="过滤类型">
       <label class="setting"><span><strong>广告与推广</strong><small>明确标识、广告专用节点</small></span><span class="switch"><input id="skipAds" type="checkbox"><span></span></span></label>
       <label class="setting"><span><strong>直播推荐</strong><small>推荐流中的直播卡片</small></span><span class="switch"><input id="skipLive" type="checkbox"><span></span></span></label>
-      <label class="setting"><span><strong>带货视频 <em>可选</em></strong><small>带商品卡或购买入口的内容</small></span><span class="switch"><input id="skipShopping" type="checkbox"><span></span></span></label>
+      <label class="setting"><span><strong>带货视频 <em>可选</em></strong><small>带商品卡或播放器购物入口；需单独开启</small></span><span class="switch"><input id="skipShopping" type="checkbox"><span></span></span></label>
     </section>
     <section class="settings blacklist-setting"><label class="setting"><span><strong>黑名单作者</strong><small>自动跳过名单内作者的视频和直播</small></span><span class="switch"><input id="skipBlocked" type="checkbox"><span></span></span></label></section>
     <section class="stats" aria-label="累计成功跳过"><div><b id="ad-count">0</b><span>广告推广</span></div><div><b id="live-count">0</b><span>直播推荐</span></div><div><b id="shopping-count">0</b><span>带货视频</span></div><div><b id="blocked-count">0</b><span>黑名单</span></div></section>
