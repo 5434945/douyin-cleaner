@@ -135,10 +135,10 @@ document.getElementById('run').addEventListener('click', async event => {
   await check('透明祖先中的广告标识，不触发', () => { const root = sample(item('ad')); root.querySelector('.account').style.opacity = '0'; assert(classify(root).type === 'normal'); });
   await check('文案中提及其他作者，不当成当前作者', () => { const root = sample(item()); root.querySelector('[data-e2e="video-avatar"]').remove(); root.querySelector('[data-e2e="video-desc"]').innerHTML = '<a href="https://www.douyin.com/user/MS4w.someone">@其他作者</a>'; assert(originalCore.authorInfo(root).id === ''); });
   await check('评论里提到广告，不触发', () => { const root = sample(item()); root.querySelector('[data-e2e="video-info"]').insertAdjacentHTML('beforeend', '<div data-e2e="comment-list"><span>广告</span></div>'); assert(classify(root).type === 'normal'); });
-  await check('实站播放器购物组件识别，仍服从带货独立开关', () => { const root = sample(item()); shopAnchor(root); assert(classify(root, { skipShopping: true }).type === 'shopping'); assert(classify(root).type === 'normal'); });
+  await check('实站播放器购物组件识别，旧关闭设置也无法禁用', () => { const root = sample(item()); shopAnchor(root); assert(classify(root, { skipShopping: true }).type === 'shopping'); assert(classify(root, {skipShopping:false}).type === 'shopping'); });
   await check('文案和评论中的购物组件不作为当前商品入口', () => { const root = sample(item()); shopAnchor(root.querySelector('[data-e2e="video-desc"]')); root.insertAdjacentHTML('beforeend', '<div data-e2e="comment-list"><div class="xgplayer-shop-anchor">购物 | 示例商品</div></div>'); assert(classify(root, { skipShopping: true }).type === 'normal'); });
   await check('隐藏播放器购物组件不触发跳过', () => { const root = sample(item()); shopAnchor(root); root.querySelector('.xgplayer-shop-anchor').hidden = true; assert(classify(root, { skipShopping: true }).type === 'normal'); });
-  await check('带货独立开关默认关闭', () => { const root = sample(item('shopping')); assert(classify(root).type === 'normal'); assert(classify(root, { skipShopping: true }).type === 'shopping'); });
+  await check('带货始终开启，忽略旧版关闭设置', () => { const root = sample(item('shopping')); assert(classify(root,{skipShopping:false}).type === 'shopping'); assert(classify(root, { skipShopping: true }).type === 'shopping'); });
   await check('商品购买链接识别', () => { const root = sample(item()); root.insertAdjacentHTML('beforeend', '<a href="https://haohuo.jinritemai.com/product/123">立即购买</a>'); assert(classify(root, { skipShopping: true }).type === 'shopping'); });
   await check('作者白名单覆盖广告规则', () => assert(classify(sample(item('ad')), { whitelist: [{ id: 'MS4w.author', name: '作者' }] }).type === 'allowed'));
   await check('预加载的屏外广告不会选为当前卡片', () => { const normal = item(); sample(normal); const ad = document.createElement('div'); ad.innerHTML = cardHTML(item('ad')); const node = ad.firstElementChild; node.style.position = 'fixed'; node.style.top = '2000px'; node.style.width = '600px'; node.style.height = '400px'; fixtures.append(node); assert(originalCore.identity(originalCore.activeCard()) === `data-e2e-vid:${normal.id}`); });
@@ -148,7 +148,7 @@ document.getElementById('run').addEventListener('click', async event => {
   await check('实站广告字形变体实际跳过', async () => { await reset([item(), item()]); glyphBadge(cardsNode.firstElementChild); await until(() => storageData.stats.ad === 1); assert(model.index === 1 && model.clicks === 1); });
   await check('播放器购物入口自动跳过且只计一次', async () => { await reset([item(), item()], { skipShopping: true }); shopAnchor(cardsNode.firstElementChild); await until(() => storageData.stats.shopping === 1); await delay(400); assert(model.index === 1 && model.clicks === 1 && storageData.stats.shopping === 1); });
   await check('播放器购物入口晚出现时重新检测', async () => { await reset([item(), item()], { skipShopping: true }); await delay(650); assert(model.index === 0); shopAnchor(cardsNode.firstElementChild); await until(() => storageData.stats.shopping === 1); assert(model.index === 1); });
-  await check('播放器购物入口服从关闭和作者白名单', async () => { for (const patch of [{ skipShopping: false }, { skipShopping: true, whitelist: [{ id: 'MS4w.author', name: '作者' }] }]) { await reset([item(), item()], patch); shopAnchor(cardsNode.firstElementChild); await delay(650); assert(model.index === 0 && model.clicks === 0); } });
+  await check('播放器购物入口仍服从总暂停和作者白名单', async () => { for (const patch of [{ enabled: false }, { skipShopping: true, whitelist: [{ id: 'MS4w.author', name: '作者' }] }]) { await reset([item(), item()], patch); shopAnchor(cardsNode.firstElementChild); await delay(650); assert(model.index === 0 && model.clicks === 0); } });
   await check('广告跳过一次，确认成功后计数', async () => { await reset([item('ad'), item()]); await until(() => storageData.stats.ad === 1); await delay(800); assert(model.index === 1 && model.clicks === 1 && storageData.stats.ad === 1); });
   await check('连续广告和直播都跳过，不多跳正常视频', async () => { await reset([item('ad'), item('live'), item()]); await until(() => storageData.stats.live === 1); assert(model.index === 2 && model.clicks === 2 && storageData.stats.ad === 1); });
   await check('独立直播与旧视频共存时真实切换并计数', async () => {
@@ -176,6 +176,17 @@ document.getElementById('run').addEventListener('click', async event => {
   await check('等待期内关闭广告开关会取消跳过', async () => { await reset([item('ad'), item()], { skipDelay: 1000 }); await delay(100); await settingsPatch({ skipAds: false }); await delay(1250); assert(model.index === 0 && storageData.stats.ad === 0); });
   await check('本条放行阻止自动跳过', async () => { await reset([item('ad'), item()], { skipDelay: 1000 }); assert((await pageAction('allow')).ok); await delay(1250); assert(model.index === 0 && model.clicks === 0); });
   await check('输入框聚焦时暂停', async () => { await reset([item('ad'), item()]); document.getElementById('editor').focus(); await delay(850); assert(model.index === 0); document.getElementById('editor').blur(); await until(() => storageData.stats.ad === 1); });
+  await check('零宽裁切的评论栏不会阻止带货视频跳过', async () => {
+    await reset([item('shopping'), item()], { skipShopping: false });
+    const drawer=document.createElement('div'); drawer.style.cssText='position:fixed;left:200px;top:100px;width:0;height:300px;overflow:hidden';
+    drawer.innerHTML='<div data-e2e="comment-list" style="width:23px;height:250px">折叠评论</div>';document.body.append(drawer);
+    try { assert(!originalCore.visible(drawer.firstElementChild)); await until(()=>storageData.stats.shopping===1);assert(model.index===1); } finally { drawer.remove(); }
+  });
+  await check('实际展开的评论栏仍暂停，关闭后带货视频跳过', async () => {
+    await reset([item('shopping'), item()]); const drawer=document.createElement('div');drawer.style.cssText='position:fixed;left:200px;top:100px;width:250px;height:300px;overflow:hidden';
+    drawer.innerHTML='<div data-e2e="comment-list" style="width:200px;height:250px">展开评论</div>';document.body.append(drawer);
+    try {await delay(650);assert(model.index===0);drawer.remove();await until(()=>storageData.stats.shopping===1);} finally {drawer.remove();}
+  });
   await check('弹窗打开时暂停', async () => { await reset([item('ad'), item()]); const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog'); dialog.textContent = '模拟弹窗'; dialog.style.cssText = 'position:fixed;top:30px;left:30px;width:200px;height:80px;background:red'; document.body.append(dialog); await delay(850); assert(model.index === 0); dialog.remove(); await until(() => storageData.stats.ad === 1); });
   await check('返回并放行，不会再次跳过', async () => { await reset([item('ad'), item()]); await until(() => storageData.stats.ad === 1); assert((await pageAction('undo')).ok); await until(() => model.index === 0); await delay(900); assert(model.index === 0 && storageData.stats.ad === 1); });
   await check('浏览到其他内容后，返回按钮不误退一条', async () => { await reset([item('ad'), item(), item()]); await until(() => storageData.stats.ad === 1); navigate(1); await pageAction('status'); const response = await pageAction('undo'); assert(!response.ok && model.index === 2); });

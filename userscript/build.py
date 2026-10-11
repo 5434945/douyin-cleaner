@@ -11,8 +11,8 @@ def module(name):
 metadata='''// ==UserScript==
 // @name         抖音清爽刷 · 广告直播带货过滤
 // @namespace    https://github.com/5434945/douyin-cleaner
-// @version      0.5.0
-// @description  自动跳过抖音推荐流的明确广告、直播推荐和可选带货视频，支持手动标记广告、作者黑名单和快速拉黑；数据仅保存在本机。
+// @version      0.5.1
+// @description  自动跳过抖音推荐流的明确广告、直播推荐和带货视频，支持手动标记广告、作者黑名单和快速拉黑；数据仅保存在本机。
 // @author       5434945
 // @license      MIT
 // @match        https://www.douyin.com/*
@@ -36,7 +36,7 @@ content=content.replace('event.composedPath().includes(uiHost)', "(event.compose
 capture=read('feed-capture.js').replace('const Feed = globalThis.DouyinCleanerFeed;', 'const Feed = localScope.DouyinCleanerFeed;').replace('(function () {','(function (window) {',1)
 capture=capture.rsplit('})();',1)[0]+'})(unsafeWindow);'
 body=re.search(r'<body>(.*?)</body>',read('popup.html'),re.S).group(1)
-body=re.sub(r'<script.*?</script>','',body,flags=re.S).replace('v0.4.5','v0.5.0 油猴版')
+body=re.sub(r'<script.*?</script>','',body,flags=re.S).replace('v0.4.6','v0.5.1 油猴版')
 css=read('popup.css')+'\n'+read('content.css')
 panel='''
 function mountPanel() {

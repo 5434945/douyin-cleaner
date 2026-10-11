@@ -13,7 +13,7 @@ function harness(shared={}) {
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 test('油猴包独立启动，不依赖 Chrome 和外部 require，保持接口模块顺序',async()=>{
  const h=harness();await flush();assert.equal(h.store.settings.enabled,true);assert.ok(h.store.stats);assert.equal(h.ctx.chrome,undefined);
- const status=await h.dispatch({target:'dy-cleaner-page',action:'status'});assert.equal(status.ok,true);assert.equal(status.version,'0.5.0');assert.equal(status.selectorHits.feedAvailable,true);
+ const status=await h.dispatch({target:'dy-cleaner-page',action:'status'});assert.equal(status.ok,true);assert.equal(status.version,'0.5.1');assert.equal(status.selectorHits.feedAvailable,true);
  assert.ok(!bundle.includes('// @require'));assert.ok(bundle.includes('// @noframes'));assert.equal(h.menu.length,2);
 });
 test('广告标记与设置保存在 GM 存储，重新启动保留，撤销不丢其他数据',async()=>{

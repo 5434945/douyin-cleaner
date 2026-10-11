@@ -3,7 +3,7 @@
   "use strict";
   const seed = scope.DouyinCleanerBlocklist || (typeof module !== 'undefined' && module.exports ? require('./blocked-authors.js') : []);
   const DEFAULTS = Object.freeze({
-    enabled: true, skipAds: true, skipLive: true, skipShopping: false,
+    enabled: true, skipAds: true, skipLive: true, skipShopping: true,
     showNotice: true, iconDetection: true, apiDetection: true, shieldAds: true, skipDelay: 250, settingsRevision: 1, whitelist: [], skipBlocked: true, collectBrandPromoters: true, blacklist: seed, collectionExclusions: [], learnedAds: []
   });
   const SELECTORS = Object.freeze({
@@ -29,7 +29,7 @@
   function normalizeSettings(value = {}) {
     if (!value || typeof value !== 'object') value = {};
     const settings = { ...DEFAULTS };
-    for (const key of ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters']) {
+    for (const key of ['enabled', 'skipAds', 'skipLive', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters']) {
       if (typeof value[key] === 'boolean') settings[key] = value[key];
     }
     if (Number.isFinite(value.skipDelay)) {
@@ -98,11 +98,24 @@
     const win = element.ownerDocument.defaultView;
     const style = win.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
-    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-      if (Number(win.getComputedStyle(parent).opacity) === 0) return false;
-    }
     const rect = element.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < win.innerHeight && rect.left < win.innerWidth;
+    let left = Math.max(0, rect.left), right = Math.min(win.innerWidth, rect.right);
+    let top = Math.max(0, rect.top), bottom = Math.min(win.innerHeight, rect.bottom);
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      const parentStyle = win.getComputedStyle(parent);
+      if (Number(parentStyle.opacity) === 0) return false;
+      // Collapsed comment drawers keep non-zero children mounted outside a zero-width
+      // overflow container. Only their actually visible intersection should pause us.
+      const clipX = /^(hidden|clip|auto|scroll)$/.test(parentStyle.overflowX);
+      const clipY = /^(hidden|clip|auto|scroll)$/.test(parentStyle.overflowY);
+      if (clipX || clipY) {
+        const bounds = parent.getBoundingClientRect();
+        if (clipX) { left = Math.max(left, bounds.left); right = Math.min(right, bounds.right); }
+        if (clipY) { top = Math.max(top, bounds.top); bottom = Math.min(bottom, bounds.bottom); }
+      }
+      if (right <= left || bottom <= top) return false;
+    }
+    return right > left && bottom > top;
   }
   function usable(element) {
     if (!visible(element)) return false;
@@ -199,7 +212,7 @@
     }
     if (author.id && options.whitelist.some(item => item.id === author.id)) return { type: 'allowed', rule: 'author-whitelist', evidence: '作者在白名单中', author, reasons };
     if (options.skipBlocked && author.id && options.blacklist?.some(item => item.id === author.id)) { add('blocked', 'author-blacklist', '作者在黑名单中'); return { type: 'blocked', rule: 'author-blacklist', evidence: '作者在黑名单中', author, reasons }; }
-    const reason = reasons.find(item => ({ ad: options.skipAds, live: options.skipLive, shopping: options.skipShopping })[item.type]);
+    const reason = reasons.find(item => ({ ad: options.skipAds, live: options.skipLive, shopping: true })[item.type]);
     return { ...(reason || { type: 'normal', rule: 'no-enabled-rule', evidence: '未发现已开启的过滤标识' }), author, reasons };
   }
   function activeCard(doc = document) {

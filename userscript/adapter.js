@@ -28,7 +28,7 @@ function dispatch(message) {
 }
 const chrome = {
   runtime: {
-    id: runtimeId, getManifest: () => ({ version: '0.5.0' }), sendMessage: dispatch,
+    id: runtimeId, getManifest: () => ({ version: '0.5.1' }), sendMessage: dispatch,
     onMessage: { addListener: listener => runtimeListeners.push(listener) },
     onInstalled: { addListener: listener => installedListeners.push(listener) }
   },

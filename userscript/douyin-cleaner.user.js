@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         抖音清爽刷 · 广告直播带货过滤
 // @namespace    https://github.com/5434945/douyin-cleaner
-// @version      0.5.0
-// @description  自动跳过抖音推荐流的明确广告、直播推荐和可选带货视频，支持手动标记广告、作者黑名单和快速拉黑；数据仅保存在本机。
+// @version      0.5.1
+// @description  自动跳过抖音推荐流的明确广告、直播推荐和带货视频，支持手动标记广告、作者黑名单和快速拉黑；数据仅保存在本机。
 // @author       5434945
 // @license      MIT
 // @match        https://www.douyin.com/*
@@ -36,7 +36,7 @@ const localScope = {};
   "use strict";
   const seed = scope.DouyinCleanerBlocklist || (typeof module !== 'undefined' && module.exports ? require('./blocked-authors.js') : []);
   const DEFAULTS = Object.freeze({
-    enabled: true, skipAds: true, skipLive: true, skipShopping: false,
+    enabled: true, skipAds: true, skipLive: true, skipShopping: true,
     showNotice: true, iconDetection: true, apiDetection: true, shieldAds: true, skipDelay: 250, settingsRevision: 1, whitelist: [], skipBlocked: true, collectBrandPromoters: true, blacklist: seed, collectionExclusions: [], learnedAds: []
   });
   const SELECTORS = Object.freeze({
@@ -62,7 +62,7 @@ const localScope = {};
   function normalizeSettings(value = {}) {
     if (!value || typeof value !== 'object') value = {};
     const settings = { ...DEFAULTS };
-    for (const key of ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters']) {
+    for (const key of ['enabled', 'skipAds', 'skipLive', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters']) {
       if (typeof value[key] === 'boolean') settings[key] = value[key];
     }
     if (Number.isFinite(value.skipDelay)) {
@@ -131,11 +131,24 @@ const localScope = {};
     const win = element.ownerDocument.defaultView;
     const style = win.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
-    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-      if (Number(win.getComputedStyle(parent).opacity) === 0) return false;
-    }
     const rect = element.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < win.innerHeight && rect.left < win.innerWidth;
+    let left = Math.max(0, rect.left), right = Math.min(win.innerWidth, rect.right);
+    let top = Math.max(0, rect.top), bottom = Math.min(win.innerHeight, rect.bottom);
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      const parentStyle = win.getComputedStyle(parent);
+      if (Number(parentStyle.opacity) === 0) return false;
+      // Collapsed comment drawers keep non-zero children mounted outside a zero-width
+      // overflow container. Only their actually visible intersection should pause us.
+      const clipX = /^(hidden|clip|auto|scroll)$/.test(parentStyle.overflowX);
+      const clipY = /^(hidden|clip|auto|scroll)$/.test(parentStyle.overflowY);
+      if (clipX || clipY) {
+        const bounds = parent.getBoundingClientRect();
+        if (clipX) { left = Math.max(left, bounds.left); right = Math.min(right, bounds.right); }
+        if (clipY) { top = Math.max(top, bounds.top); bottom = Math.min(bottom, bounds.bottom); }
+      }
+      if (right <= left || bottom <= top) return false;
+    }
+    return right > left && bottom > top;
   }
   function usable(element) {
     if (!visible(element)) return false;
@@ -232,7 +245,7 @@ const localScope = {};
     }
     if (author.id && options.whitelist.some(item => item.id === author.id)) return { type: 'allowed', rule: 'author-whitelist', evidence: '作者在白名单中', author, reasons };
     if (options.skipBlocked && author.id && options.blacklist?.some(item => item.id === author.id)) { add('blocked', 'author-blacklist', '作者在黑名单中'); return { type: 'blocked', rule: 'author-blacklist', evidence: '作者在黑名单中', author, reasons }; }
-    const reason = reasons.find(item => ({ ad: options.skipAds, live: options.skipLive, shopping: options.skipShopping })[item.type]);
+    const reason = reasons.find(item => ({ ad: options.skipAds, live: options.skipLive, shopping: true })[item.type]);
     return { ...(reason || { type: 'normal', rule: 'no-enabled-rule', evidence: '未发现已开启的过滤标识' }), author, reasons };
   }
   function activeCard(doc = document) {
@@ -349,7 +362,7 @@ function dispatch(message) {
 }
 const chrome = {
   runtime: {
-    id: runtimeId, getManifest: () => ({ version: '0.5.0' }), sendMessage: dispatch,
+    id: runtimeId, getManifest: () => ({ version: '0.5.1' }), sendMessage: dispatch,
     onMessage: { addListener: listener => runtimeListeners.push(listener) },
     onInstalled: { addListener: listener => installedListeners.push(listener) }
   },
@@ -903,7 +916,7 @@ function mountPanel() {
   `;
   const shell=document.createElement('div'); shell.className='shell';
   const toggle=document.createElement('button'); toggle.type='button'; toggle.className='toggle';toggle.textContent='清爽刷设置';toggle.setAttribute('aria-expanded','false');
-  const panel=document.createElement('section'); panel.className='panel';panel.hidden=true;panel.innerHTML="\n  <header><div class=\"brand-icon\" aria-hidden=\"true\">↧</div><div><h1>抖音清爽刷</h1><p>留下想看的，跳过打扰。</p></div><span class=\"version\">v0.5.0 油猴版</span></header>\n  <main>\n    <section class=\"master\"><div><strong>自动过滤</strong><small>快捷键 Alt + Shift + S</small></div><label class=\"switch\"><input id=\"enabled\" type=\"checkbox\" aria-label=\"自动过滤\"><span></span></label></section>\n    <section class=\"status\" aria-live=\"polite\"><span id=\"status-dot\" class=\"dot\"></span><div><strong id=\"status\">正在连接…</strong><p id=\"evidence\">打开抖音的「推荐」页面开始使用</p></div></section>\n    <section class=\"settings\" aria-label=\"过滤类型\">\n      <label class=\"setting\"><span><strong>广告与推广</strong><small>明确标识、广告专用节点</small></span><span class=\"switch\"><input id=\"skipAds\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"setting\"><span><strong>直播推荐</strong><small>推荐流中的直播卡片</small></span><span class=\"switch\"><input id=\"skipLive\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"setting\"><span><strong>带货视频 <em>可选</em></strong><small>带商品卡或播放器购物入口；需单独开启</small></span><span class=\"switch\"><input id=\"skipShopping\" type=\"checkbox\"><span></span></span></label>\n    </section>\n    <section class=\"settings blacklist-setting\"><label class=\"setting\"><span><strong>黑名单作者</strong><small>自动跳过名单内作者的视频和直播</small></span><span class=\"switch\"><input id=\"skipBlocked\" type=\"checkbox\"><span></span></span></label></section>\n    <section class=\"stats\" aria-label=\"累计成功跳过\"><div><b id=\"ad-count\">0</b><span>广告推广</span></div><div><b id=\"live-count\">0</b><span>直播推荐</span></div><div><b id=\"shopping-count\">0</b><span>带货视频</span></div><div><b id=\"blocked-count\">0</b><span>黑名单</span></div></section>\n    <section class=\"actions\"><button id=\"allow\" type=\"button\">本条放行</button><button id=\"undo\" type=\"button\" disabled>返回并放行</button><button id=\"mark-ad\" type=\"button\" class=\"wide\">标记本条为广告</button><button id=\"block\" type=\"button\" class=\"wide\">屏蔽当前作者 · Alt + Shift + B</button><button id=\"whitelist\" type=\"button\" class=\"wide\">将当前作者加入白名单</button></section>\n    <p id=\"feedback\" class=\"feedback\" role=\"status\" hidden></p>\n    <details><summary>更多设置</summary><div class=\"details-body\">\n      <label class=\"setting\"><span><strong>跳过提示</strong><small>提示中可直接返回并放行</small></span><span class=\"switch\"><input id=\"showNotice\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"setting\"><span><strong>广告图标兼容识别</strong><small>匹配作者信息区的已知图标；误判时关闭</small></span><span class=\"switch\"><input id=\"iconDetection\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"setting\"><span><strong>接口广告标识识别</strong><small>补充检测推荐接口的明确广告标记</small></span><span class=\"switch\"><input id=\"apiDetection\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"setting\"><span><strong>跳过时遮挡广告</strong><small>切换时遮挡画面，保留你的声音设置</small></span><span class=\"switch\"><input id=\"shieldAds\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"delay-label\" for=\"skipDelay\">画面稳定等待 <output id=\"delay-value\">250 ms</output></label><input id=\"skipDelay\" type=\"range\" min=\"200\" max=\"1500\" step=\"50\">\n      <p class=\"hint\">标识较晚出现时会重新检测。数值越大，手动切换时越从容。</p>\n      <h2>作者白名单</h2><ul id=\"authors\" class=\"authors\"></ul><p id=\"empty-authors\" class=\"hint\">暂无。加入后，该作者的广告和直播也会保留。</p>\n      <button id=\"resetStats\" class=\"text-button\" type=\"button\">清空本地统计</button>\n    </div></details>\n    <details><summary>我标记的广告 <span id=\"learned-count\">0</span></summary><div class=\"details-body\"><p class=\"hint\">仅记住你标记的视频，下次在推荐流遇到同一条就跳过。保存在本机；广告开关、作者白名单和本条放行仍有效。</p><ul id=\"learned-ads\" class=\"authors\"></ul><p id=\"empty-learned\" class=\"hint\">暂无标记。遇到漏掉的广告时，点击“标记本条为广告”。</p><p class=\"hint\">最多 2000 条；移除可撤销。重发或剪辑形成的新视频需另行标记。</p></div></details>\n    <details><summary>管理黑名单</summary><div class=\"details-body\"><p class=\"hint\">按作者主页 ID 匹配。名单内作者的所有推荐内容都会跳过；白名单和本条放行优先。移除即可恢复。</p><label class=\"setting\"><span><strong>自动收录明确推广作者</strong><small>品牌相关且有广告标记或合作披露时收录</small></span><span class=\"switch\"><input id=\"collectBrandPromoters\" type=\"checkbox\"><span></span></span></label><p class=\"hint\">范围：华为、鸿蒙、鸿蒙智行相关品牌。只保存作者与作品证据链接；移除后不会再自动收录该作者。</p><ul id=\"blocked-authors\" class=\"authors\"></ul><p id=\"empty-blocked\" class=\"hint\">暂无黑名单作者。</p><label class=\"hint\" for=\"blacklist-input\">导入 JSON 名单，或粘贴作者主页链接（每行一个）</label><textarea id=\"blacklist-input\" rows=\"3\" placeholder=\"https://www.douyin.com/user/…\"></textarea><div class=\"actions\"><button id=\"import-blocklist\" type=\"button\">合并导入</button><button id=\"export-blocklist\" type=\"button\">导出名单</button></div><p class=\"hint\">合并不覆盖已有名单，最多 1000 个作者。</p></div></details>\n    <details><summary>诊断信息</summary><div class=\"details-body\"><p class=\"hint\">识别不了时可查看命中的规则。导出的诊断不包含视频地址、文案和作者信息。</p><pre id=\"diagnostics\">等待连接</pre><button id=\"export\" type=\"button\">导出诊断</button></div></details>\n  </main>\n  <footer>本机处理 · 无需账号 · 仅抖音推荐流<br>漏掉的广告可手动标记</footer>\n  \n  \n";
+  const panel=document.createElement('section'); panel.className='panel';panel.hidden=true;panel.innerHTML="\n  <header><div class=\"brand-icon\" aria-hidden=\"true\">↧</div><div><h1>抖音清爽刷</h1><p>留下想看的，跳过打扰。</p></div><span class=\"version\">v0.5.1 油猴版</span></header>\n  <main>\n    <section class=\"master\"><div><strong>自动过滤</strong><small>快捷键 Alt + Shift + S</small></div><label class=\"switch\"><input id=\"enabled\" type=\"checkbox\" aria-label=\"自动过滤\"><span></span></label></section>\n    <section class=\"status\" aria-live=\"polite\"><span id=\"status-dot\" class=\"dot\"></span><div><strong id=\"status\">正在连接…</strong><p id=\"evidence\">打开抖音的「推荐」页面开始使用</p></div></section>\n    <section class=\"settings\" aria-label=\"过滤类型\">\n      <label class=\"setting\"><span><strong>广告与推广</strong><small>明确标识、广告专用节点</small></span><span class=\"switch\"><input id=\"skipAds\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"setting\"><span><strong>直播推荐</strong><small>推荐流中的直播卡片</small></span><span class=\"switch\"><input id=\"skipLive\" type=\"checkbox\"><span></span></span></label>\n      <div class=\"setting\"><span><strong>带货视频</strong><small>有商品卡或购物入口即跳过，无需单独开启</small></span><em>始终开启</em></div>\n    </section>\n    <section class=\"settings blacklist-setting\"><label class=\"setting\"><span><strong>黑名单作者</strong><small>自动跳过名单内作者的视频和直播</small></span><span class=\"switch\"><input id=\"skipBlocked\" type=\"checkbox\"><span></span></span></label></section>\n    <section class=\"stats\" aria-label=\"累计成功跳过\"><div><b id=\"ad-count\">0</b><span>广告推广</span></div><div><b id=\"live-count\">0</b><span>直播推荐</span></div><div><b id=\"shopping-count\">0</b><span>带货视频</span></div><div><b id=\"blocked-count\">0</b><span>黑名单</span></div></section>\n    <section class=\"actions\"><button id=\"allow\" type=\"button\">本条放行</button><button id=\"undo\" type=\"button\" disabled>返回并放行</button><button id=\"mark-ad\" type=\"button\" class=\"wide\">标记本条为广告</button><button id=\"block\" type=\"button\" class=\"wide\">屏蔽当前作者 · Alt + Shift + B</button><button id=\"whitelist\" type=\"button\" class=\"wide\">将当前作者加入白名单</button></section>\n    <p id=\"feedback\" class=\"feedback\" role=\"status\" hidden></p>\n    <details><summary>更多设置</summary><div class=\"details-body\">\n      <label class=\"setting\"><span><strong>跳过提示</strong><small>提示中可直接返回并放行</small></span><span class=\"switch\"><input id=\"showNotice\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"setting\"><span><strong>广告图标兼容识别</strong><small>匹配作者信息区的已知图标；误判时关闭</small></span><span class=\"switch\"><input id=\"iconDetection\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"setting\"><span><strong>接口广告标识识别</strong><small>补充检测推荐接口的明确广告标记</small></span><span class=\"switch\"><input id=\"apiDetection\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"setting\"><span><strong>跳过时遮挡广告</strong><small>切换时遮挡画面，保留你的声音设置</small></span><span class=\"switch\"><input id=\"shieldAds\" type=\"checkbox\"><span></span></span></label>\n      <label class=\"delay-label\" for=\"skipDelay\">画面稳定等待 <output id=\"delay-value\">250 ms</output></label><input id=\"skipDelay\" type=\"range\" min=\"200\" max=\"1500\" step=\"50\">\n      <p class=\"hint\">标识较晚出现时会重新检测。数值越大，手动切换时越从容。</p>\n      <h2>作者白名单</h2><ul id=\"authors\" class=\"authors\"></ul><p id=\"empty-authors\" class=\"hint\">暂无。加入后，该作者的广告和直播也会保留。</p>\n      <button id=\"resetStats\" class=\"text-button\" type=\"button\">清空本地统计</button>\n    </div></details>\n    <details><summary>我标记的广告 <span id=\"learned-count\">0</span></summary><div class=\"details-body\"><p class=\"hint\">仅记住你标记的视频，下次在推荐流遇到同一条就跳过。保存在本机；广告开关、作者白名单和本条放行仍有效。</p><ul id=\"learned-ads\" class=\"authors\"></ul><p id=\"empty-learned\" class=\"hint\">暂无标记。遇到漏掉的广告时，点击“标记本条为广告”。</p><p class=\"hint\">最多 2000 条；移除可撤销。重发或剪辑形成的新视频需另行标记。</p></div></details>\n    <details><summary>管理黑名单</summary><div class=\"details-body\"><p class=\"hint\">按作者主页 ID 匹配。名单内作者的所有推荐内容都会跳过；白名单和本条放行优先。移除即可恢复。</p><label class=\"setting\"><span><strong>自动收录明确推广作者</strong><small>品牌相关且有广告标记或合作披露时收录</small></span><span class=\"switch\"><input id=\"collectBrandPromoters\" type=\"checkbox\"><span></span></span></label><p class=\"hint\">范围：华为、鸿蒙、鸿蒙智行相关品牌。只保存作者与作品证据链接；移除后不会再自动收录该作者。</p><ul id=\"blocked-authors\" class=\"authors\"></ul><p id=\"empty-blocked\" class=\"hint\">暂无黑名单作者。</p><label class=\"hint\" for=\"blacklist-input\">导入 JSON 名单，或粘贴作者主页链接（每行一个）</label><textarea id=\"blacklist-input\" rows=\"3\" placeholder=\"https://www.douyin.com/user/…\"></textarea><div class=\"actions\"><button id=\"import-blocklist\" type=\"button\">合并导入</button><button id=\"export-blocklist\" type=\"button\">导出名单</button></div><p class=\"hint\">合并不覆盖已有名单，最多 1000 个作者。</p></div></details>\n    <details><summary>诊断信息</summary><div class=\"details-body\"><p class=\"hint\">识别不了时可查看命中的规则。导出的诊断不包含视频地址、文案和作者信息。</p><pre id=\"diagnostics\">等待连接</pre><button id=\"export\" type=\"button\">导出诊断</button></div></details>\n  </main>\n  <footer>本机处理 · 无需账号 · 仅抖音推荐流<br>漏掉的广告可手动标记</footer>\n  \n  \n";
   shell.append(toggle,panel);shadow.append(style,shell);document.documentElement.append(host);
   const noticeStyle=document.createElement('style');noticeStyle.textContent='#dy-cleaner-ui {position:fixed;right:24px;bottom:28px;z-index:2147483647;}';document.documentElement.append(noticeStyle);
   function open() {panel.hidden=false;toggle.setAttribute('aria-expanded','true');}
@@ -914,7 +927,7 @@ function mountPanel() {
     "use strict";
 const Core = localScope.DouyinCleanerCore;
 const $ = id => document.getElementById(id);
-const settingKeys = ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters'];
+const settingKeys = ['enabled', 'skipAds', 'skipLive', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters'];
 let settings = Core.normalizeSettings();
 let stats = {};
 let pageStatus = null;

@@ -9,12 +9,13 @@ test('推荐页与旧版推荐页允许，搜索、详情、直播、非抖音�
   for (const url of ['https://www.douyin.com/', 'https://www.douyin.com/?recommend=1', 'https://www.douyin.com/recommend', 'https://douyin.com/root/recommend/', 'https://www.douyin.com/root']) assert.equal(Core.supportedPage(url), true, url);
   for (const url of ['https://www.douyin.com/video/123', 'https://www.douyin.com/search/广告', 'https://www.douyin.com/root/live/123', 'https://live.douyin.com/123', 'https://creator.douyin.com/', 'https://example.com/', 'http://www.douyin.com/', 'not a url']) assert.equal(Core.supportedPage(url), false, url);
 });
-test('默认开启广告和直播，带货关闭', () => {
+test('默认开启广告和直播，带货始终开启', () => {
   const settings = Core.normalizeSettings();
   assert.equal(settings.enabled, true);
   assert.equal(settings.skipAds, true);
   assert.equal(settings.skipLive, true);
-  assert.equal(settings.skipShopping, false);
+  assert.equal(settings.skipShopping, true);
+  assert.equal(Core.normalizeSettings({skipShopping:false}).skipShopping,true);
   assert.deepEqual(settings.whitelist, []);
 });
 test('设置类型校验与延迟范围约束', () => {

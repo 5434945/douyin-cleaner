@@ -1,7 +1,7 @@
 "use strict";
 const Core = DouyinCleanerCore;
 const $ = id => document.getElementById(id);
-const settingKeys = ['enabled', 'skipAds', 'skipLive', 'skipShopping', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters'];
+const settingKeys = ['enabled', 'skipAds', 'skipLive', 'showNotice', 'iconDetection', 'apiDetection', 'shieldAds', 'skipBlocked', 'collectBrandPromoters'];
 let settings = Core.normalizeSettings();
 let stats = {};
 let pageStatus = null;
